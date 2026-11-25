@@ -1,0 +1,77 @@
+{
+    "parse": [
+        {
+            "name": "最小の指定",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&page=3&rects=72,140.5,240,18",
+            "link": {
+                "src": "zotero:ABCD1234",
+                "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                "page": 3,
+                "rects": [[72, 140.5, 240, 18]]
+            }
+        },
+        {
+            "name": "版を明示し、複数の矩形と目印を持つ",
+            "query": "v=1&src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&page=12&rects=72,140,240,18;72,158,180,18&label=iv&q=%E5%9B%B32",
+            "link": {
+                "src": "zotero:ABCD1234",
+                "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                "page": 12,
+                "rects": [
+                    [72, 140, 240, 18],
+                    [72, 158, 180, 18]
+                ],
+                "label": "iv",
+                "q": "図2"
+            }
+        },
+        {
+            "name": "未対応の版",
+            "query": "v=2&src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&page=1&rects=0,0,1,1",
+            "error": "unsupported version: 2"
+        },
+        {
+            "name": "取得元の名前空間が不明",
+            "query": "src=paperless:12&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&page=1&rects=0,0,1,1",
+            "error": "invalid src"
+        },
+        {
+            "name": "SHA-256 が大文字",
+            "query": "src=zotero:ABCD1234&sha256=0123456789ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef&page=1&rects=0,0,1,1",
+            "error": "invalid sha256"
+        },
+        {
+            "name": "ページが 0",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&page=0&rects=0,0,1,1",
+            "error": "invalid page"
+        },
+        {
+            "name": "矩形の幅が 0",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&page=1&rects=0,0,0,1",
+            "error": "invalid rects"
+        },
+        {
+            "name": "矩形の値が数値でない",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&page=1&rects=0,0,1e3,1",
+            "error": "invalid rects"
+        },
+        {
+            "name": "矩形がない",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&page=1",
+            "error": "invalid rects"
+        }
+    ],
+    "format": [
+        {
+            "name": "座標を小数第 1 位に丸め、v=1 は省く",
+            "link": {
+                "src": "zotero:ABCD1234",
+                "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                "page": 2,
+                "rects": [[72.04, 140.06, 239.95, 18]],
+                "q": "図2"
+            },
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&page=2&rects=72,140.1,240,18&q=%E5%9B%B32"
+        }
+    ]
+}
