@@ -10,14 +10,23 @@
         "dev:server": "node --watch server/main.ts",
         "build": "vite build",
         "typecheck": "tsc --noEmit",
-        "test": "node --test"
+        "test": "node --test",
+        "lint": "eslint .",
+        "format": "prettier --write \"**/*.{ts,tsx}\" && eslint --fix .",
+        "format:check": "prettier --check \"**/*.{ts,tsx}\""
     },
     "dependencies": {
         "pdfjs-dist": "6.5.438"
     },
     "devDependencies": {
+        "@eslint/js": "10.0.1",
         "@types/node": "24.19.4",
-        "typescript": "7.0.2",
+        "eslint": "10.15.0",
+        "globals": "17.14.0",
+        "prettier": "3.10.1",
+        "typescript": "6.0.3",
+        "typescript-eslint": "8.74.0",
         "vite": "8.3.8"
-    }
+    },
+    "description": "PDF 上の文章や範囲を指すリンクを発行し、リンクから該当箇所を強調表示する Web アプリ"
 }

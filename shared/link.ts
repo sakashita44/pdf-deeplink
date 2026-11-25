@@ -18,7 +18,8 @@ export interface PdfLink {
     q?: string;
 }
 
-export type ParseResult = { ok: true; link: PdfLink } | { ok: false; error: string };
+export type ParseResult =
+    { ok: true; link: PdfLink } | { ok: false; error: string };
 
 const ZOTERO_SRC = /^zotero:[A-Z0-9]{8}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -57,7 +58,8 @@ export function parseLink(params: URLSearchParams): ParseResult {
     const link: PdfLink = { src, sha256, page, rects };
     const label = params.get('label');
     if (label !== null && label !== '') {
-        if ([...label].length > LIMITS.label) return { ok: false, error: 'label too long' };
+        if ([...label].length > LIMITS.label)
+            return { ok: false, error: 'label too long' };
         link.label = label;
     }
     const q = params.get('q');
@@ -74,9 +76,16 @@ function parseRects(text: string): Rect[] | null {
     const rects: Rect[] = [];
     for (const part of parts) {
         const values = part.split(',');
-        if (values.length !== 4 || !values.every((value) => NUMBER.test(value))) return null;
-        const [x, y, w, h] = values.map(Number) as [number, number, number, number];
-        if ([x, y, w, h].some((value) => Math.abs(value) > LIMITS.coordinate)) return null;
+        if (values.length !== 4 || !values.every((value) => NUMBER.test(value)))
+            return null;
+        const [x, y, w, h] = values.map(Number) as [
+            number,
+            number,
+            number,
+            number,
+        ];
+        if ([x, y, w, h].some((value) => Math.abs(value) > LIMITS.coordinate))
+            return null;
         if (w <= 0 || h <= 0) return null;
         rects.push([x, y, w, h]);
     }
@@ -88,11 +97,20 @@ export function formatLink(link: PdfLink): string {
     params.set('src', link.src);
     params.set('sha256', link.sha256);
     params.set('page', String(link.page));
-    params.set('rects', link.rects.map((rect) => rect.map((value) => roundCoordinate(value)).join(',')).join(';'));
+    params.set(
+        'rects',
+        link.rects
+            .map((rect) =>
+                rect.map((value) => roundCoordinate(value)).join(','),
+            )
+            .join(';'),
+    );
     if (link.label) params.set('label', truncate(link.label, LIMITS.label));
     if (link.q) params.set('q', truncate(link.q, LIMITS.q));
     // URLSearchParams は : , ; も符号化するが、これらは RFC 3986 のクエリにそのまま書け、解釈の結果も変わらないため、読みやすさのために戻す。
-    return params.toString().replace(/%3A|%2C|%3B/g, (escaped) => decodeURIComponent(escaped));
+    return params
+        .toString()
+        .replace(/%3A|%2C|%3B/g, (escaped) => decodeURIComponent(escaped));
 }
 
 function truncate(text: string, limit: number): string {

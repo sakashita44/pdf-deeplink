@@ -50,14 +50,18 @@ export function renderList(app: HTMLElement): void {
         </main>`;
     const form = app.querySelector<HTMLFormElement>('form')!;
     const input = form.querySelector<HTMLInputElement>('input')!;
-    const orderSelect = app.querySelector<HTMLSelectElement>('select[name=order]')!;
-    const sizeSelect = app.querySelector<HTMLSelectElement>('select[name=size]')!;
+    const orderSelect =
+        app.querySelector<HTMLSelectElement>('select[name=order]')!;
+    const sizeSelect =
+        app.querySelector<HTMLSelectElement>('select[name=size]')!;
     const status = app.querySelector<HTMLElement>('.status')!;
     const list = app.querySelector<HTMLUListElement>('.documents')!;
     const pagination = app.querySelector<HTMLElement>('.pagination')!;
 
-    for (const order of ORDERS) orderSelect.append(new Option(order.label, order.value));
-    for (const size of PAGE_SIZES) sizeSelect.append(new Option(`${size} 件`, String(size)));
+    for (const order of ORDERS)
+        orderSelect.append(new Option(order.label, order.value));
+    for (const size of PAGE_SIZES)
+        sizeSelect.append(new Option(`${size} 件`, String(size)));
 
     let state = readState(new URLSearchParams(location.search));
     let latest = 0;
@@ -100,7 +104,9 @@ export function renderList(app: HTMLElement): void {
             result.total === 0
                 ? '該当する文献はありません。'
                 : `全 ${result.total} 件中 ${first}〜${last} 件を表示${result.truncated ? '（検索対象が多いため、一部の文献だけを対象にしています）' : ''}`;
-        renderPagination(pagination, state.page, pages, (page) => navigate({ ...state, page }));
+        renderPagination(pagination, state.page, pages, (page) =>
+            navigate({ ...state, page }),
+        );
     };
 
     const navigate = (next: ListState) => {
@@ -114,8 +120,12 @@ export function renderList(app: HTMLElement): void {
         event.preventDefault();
         navigate({ ...state, q: input.value.trim(), page: 1 });
     });
-    orderSelect.addEventListener('change', () => navigate({ ...state, order: orderSelect.value, page: 1 }));
-    sizeSelect.addEventListener('change', () => navigate({ ...state, size: Number(sizeSelect.value), page: 1 }));
+    orderSelect.addEventListener('change', () =>
+        navigate({ ...state, order: orderSelect.value, page: 1 }),
+    );
+    sizeSelect.addEventListener('change', () =>
+        navigate({ ...state, size: Number(sizeSelect.value), page: 1 }),
+    );
     void render();
 }
 
@@ -125,8 +135,12 @@ function readState(params: URLSearchParams): ListState {
     const page = Number(params.get('page'));
     return {
         q: params.get('q') ?? '',
-        order: ORDERS.some((candidate) => candidate.value === order) ? order : ORDERS[0].value,
-        size: (PAGE_SIZES as readonly number[]).includes(size) ? size : PAGE_SIZES[1],
+        order: ORDERS.some((candidate) => candidate.value === order)
+            ? order
+            : ORDERS[0].value,
+        size: (PAGE_SIZES as readonly number[]).includes(size)
+            ? size
+            : PAGE_SIZES[1],
         page: Number.isSafeInteger(page) && page >= 1 ? page : 1,
     };
 }
@@ -140,14 +154,24 @@ function writeState(state: ListState): string {
     return params.size ? `/?${params}` : '/';
 }
 
-function renderPagination(nav: HTMLElement, current: number, pages: number, go: (page: number) => void): void {
+function renderPagination(
+    nav: HTMLElement,
+    current: number,
+    pages: number,
+    go: (page: number) => void,
+): void {
     nav.replaceChildren();
     if (pages <= 1) return;
-    const add = (label: string, page: number | null, options: { current?: boolean; ariaLabel?: string } = {}) => {
+    const add = (
+        label: string,
+        page: number | null,
+        options: { current?: boolean; ariaLabel?: string } = {},
+    ) => {
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = label;
-        if (options.ariaLabel) button.setAttribute('aria-label', options.ariaLabel);
+        if (options.ariaLabel)
+            button.setAttribute('aria-label', options.ariaLabel);
         if (options.current) button.setAttribute('aria-current', 'page');
         if (page === null || options.current) {
             button.disabled = true;
@@ -165,15 +189,22 @@ function renderPagination(nav: HTMLElement, current: number, pages: number, go: 
             gap.className = 'gap';
             nav.append(gap);
         }
-        add(String(page), page, { current: page === current, ariaLabel: `${page} ページ目` });
+        add(String(page), page, {
+            current: page === current,
+            ariaLabel: `${page} ページ目`,
+        });
         previous = page;
     }
-    add('次へ', current < pages ? current + 1 : null, { ariaLabel: '次のページ' });
+    add('次へ', current < pages ? current + 1 : null, {
+        ariaLabel: '次のページ',
+    });
 }
 
 function visiblePages(current: number, pages: number): number[] {
     const candidates = new Set([1, pages, current - 1, current, current + 1]);
-    return [...candidates].filter((page) => page >= 1 && page <= pages).sort((a, b) => a - b);
+    return [...candidates]
+        .filter((page) => page >= 1 && page <= pages)
+        .sort((a, b) => a - b);
 }
 
 function documentItem(doc: DocumentSummary): HTMLLIElement {

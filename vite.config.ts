@@ -15,16 +15,23 @@ function pdfjsAssets(): Plugin {
         },
         configureServer(server) {
             server.middlewares.use('/pdfjs/', (req, res, next) => {
-                const relative = normalize(decodeURIComponent((req.url ?? '').split('?')[0] ?? ''));
+                const relative = normalize(
+                    decodeURIComponent((req.url ?? '').split('?')[0] ?? ''),
+                );
                 const file = join(PDFJS_ROOT, relative);
-                const allowed = PDFJS_ASSETS.some((dir) => file.startsWith(join(PDFJS_ROOT, dir) + sep));
-                if (!allowed || !existsSync(file) || !statSync(file).isFile()) return next();
+                const allowed = PDFJS_ASSETS.some((dir) =>
+                    file.startsWith(join(PDFJS_ROOT, dir) + sep),
+                );
+                if (!allowed || !existsSync(file) || !statSync(file).isFile())
+                    return next();
                 createReadStream(file).pipe(res);
             });
         },
         closeBundle() {
             for (const dir of PDFJS_ASSETS) {
-                cpSync(join(PDFJS_ROOT, dir), join(outDir, 'pdfjs', dir), { recursive: true });
+                cpSync(join(PDFJS_ROOT, dir), join(outDir, 'pdfjs', dir), {
+                    recursive: true,
+                });
             }
         },
     };
@@ -39,6 +46,8 @@ export default defineConfig({
         host: '127.0.0.1',
         port: 5173,
         strictPort: true,
-        proxy: { '/app': `http://${process.env.PDF_DEEPLINK_LISTEN ?? '127.0.0.1:8787'}` },
+        proxy: {
+            '/app': `http://${process.env.PDF_DEEPLINK_LISTEN ?? '127.0.0.1:8787'}`,
+        },
     },
 });

@@ -17,17 +17,24 @@ const CONTENT_TYPES: Record<string, string> = {
     '.icc': 'application/vnd.iccprofile',
 };
 
-export function createStaticHandler(root: string): ((pathname: string, res: ServerResponse) => boolean) | null {
+export function createStaticHandler(
+    root: string,
+): ((pathname: string, res: ServerResponse) => boolean) | null {
     const base = resolve(root);
     const index = join(base, 'index.html');
     if (!existsSync(index)) return null;
     return (pathname, res) => {
-        const file = resolveFile(base, pathname) ?? (pathname === '/' || pathname === '/view' ? index : null);
+        const file =
+            resolveFile(base, pathname) ??
+            (pathname === '/' || pathname === '/view' ? index : null);
         if (!file) return false;
         const immutable = file.startsWith(join(base, 'assets') + sep);
         res.writeHead(200, {
-            'Content-Type': CONTENT_TYPES[extname(file)] ?? 'application/octet-stream',
-            'Cache-Control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache',
+            'Content-Type':
+                CONTENT_TYPES[extname(file)] ?? 'application/octet-stream',
+            'Cache-Control': immutable
+                ? 'public, max-age=31536000, immutable'
+                : 'no-cache',
             'X-Content-Type-Options': 'nosniff',
         });
         createReadStream(file).pipe(res);
@@ -43,6 +50,11 @@ function resolveFile(base: string, pathname: string): string | null {
         return null;
     }
     const file = join(base, normalize(decoded));
-    if (!file.startsWith(base + sep) || !existsSync(file) || !statSync(file).isFile()) return null;
+    if (
+        !file.startsWith(base + sep) ||
+        !existsSync(file) ||
+        !statSync(file).isFile()
+    )
+        return null;
     return file;
 }
