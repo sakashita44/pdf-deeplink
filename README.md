@@ -43,56 +43,50 @@ Zotero 互換 API から取得した PDF について、ページ上の文章や
 
 一覧・書誌の取得と PDF 取得前の確認に用いるエンドポイントを次の表に示す。`<apiPath>` は環境変数 `PDF_DEEPLINK_ZOTERO_API_PATH`（末尾の `/` を除いた値）を表す。
 
-| 用途                     | リクエスト                                                                                                                                           | 求める応答                                                                                                                                               |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 文献一覧の取得           | `GET <apiPath>/items/top?start=<開始位置>&limit=100&sort=<項目>&direction=<並び順>`（検索時は `q=<検索語>` を付与）。100 件ずつ先頭 5,000 件まで走査 | HTTP 200 の JSON 配列（Zotero API v3 形式）。総件数を示す `Total-Results` ヘッダを返すと走査回数を抑えられる                                             |
-| 添付一覧の補完（必要時） | `GET <apiPath>/items?itemType=attachment&sort=dateAdded&direction=asc&start=<開始位置>&limit=100`。100 件ずつ先頭 5,000 件まで走査                   | HTTP 200 の JSON 配列（Zotero API v3 形式）。親アイテムと PDF 添付の対応付けに用いる                                                                     |
-| 書誌情報の取得           | `GET <apiPath>/items/<8 文字の英大文字・数字>`（`data.parentItem` がある場合は親アイテムも取得）                                                     | HTTP 200 の JSON オブジェクト（該当なしは HTTP 404）。添付アイテムは `data.itemType: "attachment"` かつ `data.contentType: "application/pdf"` であること |
-| PDF ファイルの取得       | 事前に `GET <apiPath>/items/<8 文字の英大文字・数字>` で PDF 添付を確認したうえで、`PDF_DEEPLINK_ZOTERO_FILE_SOURCE` に応じて取得                    | 取得方法ごとの応答（「PDF の取得方法ごとの動作」を参照）                                                                                                 |
+| 用途               | リクエスト                                                                                                                                           | 求める応答                                                                                                                                               |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 文献一覧の取得     | `GET <apiPath>/items/top?start=<開始位置>&limit=100&sort=<項目>&direction=<並び順>`（検索時は `q=<検索語>` を付与）。100 件ずつ先頭 5,000 件まで走査 | HTTP 200 の JSON 配列（Zotero API v3 形式）。総件数を示す `Total-Results` ヘッダを返すと走査回数を抑えられる                                             |
+| 書誌情報の取得     | `GET <apiPath>/items/<8 文字の英大文字・数字>`（`data.parentItem` がある場合は親アイテムも取得）                                                     | HTTP 200 の JSON オブジェクト（該当なしは HTTP 404）。添付アイテムは `data.itemType: "attachment"` かつ `data.contentType: "application/pdf"` であること |
+| PDF ファイルの取得 | 事前に `GET <apiPath>/items/<8 文字の英大文字・数字>` で PDF 添付を確認したうえで、`PDF_DEEPLINK_ZOTERO_FILE_SOURCE` に応じて取得                    | 取得方法ごとの応答（「PDF の取得方法ごとの動作」を参照）                                                                                                 |
 
 - 文献一覧の `sort` には `dateModified`、`dateAdded`、`title`、`creator`、`date` のいずれか、`direction` には `asc` または `desc` が指定される。`Total-Results` ヘッダが省略された場合は、応答件数が 100 件未満になるまで順に取得される。
-- PDF 添付の有無は、アイテム自身が PDF 添付であるか、`links.attachment.attachmentType` が `"application/pdf"` かつ `links.attachment.href` が `/items/<8 文字の英大文字・数字>` で終わるかで判定される。zotero.org にファイルを保存せず WebDAV で同期しているライブラリのように `links.attachment` が返らない場合（`meta.numChildren` が 1 以上のアイテムがあるとき）は添付一覧の補完が実行され、`data.parentItem` が一致する最初の PDF 添付（`dateAdded` の昇順）が採用される。
-- 表示と出典には `data.title`、`data.creators`、`data.date`、`data.publicationTitle`、`data.DOI` が用いられる（`webdav` ではアーカイブ内のファイル選択に添付アイテムの `data.filename` も用いる）。
+- 表示と出典には `data.title`、`data.creators`、`data.date`、`data.publicationTitle`、`data.DOI` が用いられる。
 
 #### PDF の取得方法ごとの動作
 
 ##### `local`
 
-ローカルの Zotero の Local API が返す `file:` URL から、サーバと同一ファイルシステム上の PDF ファイルを直接開く。Zotero が返すパスをそのまま開き、パスの書き換えには対応しないため、Zotero と同じパスでファイルを参照できる環境でのみ利用できる（Zotero と同じパスでファイルを参照できないコンテナ内では利用できない）。
+ローカルの Zotero の Local API が返す `file:` URL から、サーバと同一ファイルシステム上の PDF ファイルを直接開く。Zotero が返すパスをそのまま開き、パスの書き換えには対応しないため、Zotero と同じパスでファイルを参照できる環境でのみ利用できる（コンテナ内から異なるパスで参照する構成では利用できない）。
 
-- 取得元 API へ `GET <apiPath>/items/<8 文字の添付キー>/file` を送信し、HTTP 302 とローカルの `file:` URL を指す `Location` ヘッダを受け付ける。ローカルの Zotero（`X-Zotero-Version` 10.0.8）の Local API では、`Location: file:///C:/Users/.../Zotero/storage/<キー>/<名前>.pdf` の形式で返される。
-- シンボリックリンク解決後の実パスが `PDF_DEEPLINK_ZOTERO_LOCAL_DIRS` の配下にある通常ファイルだけを開き、ファイルサイズを `Content-Length` として返す。許可ディレクトリの外にあるパス、ネットワーク上のパス、通常ファイル以外の対象は開かない。
+- 取得元 API へ `GET <apiPath>/items/<8 文字の添付キー>/file` を送信し、HTTP 302 とローカルの `file:` URL を指す `Location` ヘッダを受け付ける。
+- シンボリックリンク解決後の実パスが `PDF_DEEPLINK_ZOTERO_LOCAL_DIRS` の配下にある通常ファイルだけを開く。許可ディレクトリの外にあるパス、ネットワーク上のパス、通常ファイル以外の対象は開かない。
 
 ##### `web`
 
 Zotero Web API など、HTTP 200 または HTTPS のリダイレクトで PDF 本体を返す経路から取得する。zotero.org にファイルを保存せず WebDAV で同期しているライブラリでは Web API の `items/<キー>/file` が HTTP 404 を返すため、`webdav` を選択する。
 
-- 取得元 API へ `GET <apiPath>/items/<8 文字の添付キー>/file` を送信し、HTTP 200 の PDF バイト列、または絶対 `https://` URL へのリダイレクトを受け付ける。
-- リダイレクトは最大 5 回まで追跡する。リダイレクト先へは `Zotero-API-Key` ヘッダを送信しない。リダイレクト先が HTTPS でない場合や 5 回を超えた場合は取得に失敗する。
-- 最終応答に `Content-Length` ヘッダがある場合はクライアントへ引き継ぐ。
+- 取得元 API へ `GET <apiPath>/items/<8 文字の添付キー>/file` を送信し、HTTP 200 の PDF バイト列、または `https://` で始まる絶対 URL へのリダイレクトを受け付ける。
+- HTTPS でないリダイレクト先には従わない。リダイレクト先へは `Zotero-API-Key` ヘッダを送信しない。
 
 ##### `webdav`
 
 Zotero の WebDAV 同期先に配置された ZIP アーカイブから PDF 本体を展開して取得する。Zotero の WebDAV 同期では、設定画面に入力する URL の配下の `zotero/` に `<キー>.zip` が配置される。
 
-- `PDF_DEEPLINK_ZOTERO_WEBDAV_URL` 配下の `GET <ベースパス>/zotero/<8 文字の添付キー>.zip` を WebDAV サーバへ送信し、HTTP 200 で返される ZIP アーカイブを受け付ける。
+- `PDF_DEEPLINK_ZOTERO_WEBDAV_URL` 配下の `GET <ベースパス>/zotero/<8 文字の添付キー>.zip` を WebDAV サーバへ送信し、HTTP 200 の ZIP アーカイブから PDF を展開する。
 - 認証は HTTP Basic 認証にのみ対応する（Digest 認証などの他の方式には対応しない）。
-- アーカイブと展開後のファイルはそれぞれ最大 512 MiB、圧縮方式は無圧縮（Stored）と Deflate に対応する。ZIP64 と暗号化エントリには対応しない。
-- アーカイブ内の管理用ファイル（`.zotero` で始まるファイル）を除き、添付アイテムの `data.filename` に一致するファイル（一致がなく候補が 1 つだけの場合はそのファイル）を展開し、`Content-Length` 付きで返す。
+- アーカイブと展開後のファイルはそれぞれ 512 MiB を上限とする。
 
 ##### `template`
 
-取得元 API と同一の接続先（`PDF_DEEPLINK_ZOTERO_ENDPOINT`）上の任意パスから、PDF バイト列を直接取得する。
-
-- `PDF_DEEPLINK_ZOTERO_FILE_PATH` の `{key}` を 8 文字の添付キーへ置換したパスへ `GET` を送信し、HTTP 200 の PDF バイト列を受け付ける。`Content-Length` ヘッダがある場合はクライアントへ引き継ぐ。
+取得元 API と同一の接続先（`PDF_DEEPLINK_ZOTERO_ENDPOINT`）上の任意パスから、PDF バイト列を直接取得する。`PDF_DEEPLINK_ZOTERO_FILE_PATH` の `{key}` を 8 文字の添付キーへ置換したパスへ `GET` を送信し、HTTP 200 の PDF バイト列を受け付ける。
 
 #### エラー時の応答
 
-取得元との通信や PDF の取得でエラーが起きた場合、サーバはクライアントへ次の状態コードを返す。HTTP 502 と HTTP 504、および取得元エラーによる HTTP 404 では、原因がサーバの標準エラー出力へ出力される。
+取得元との通信や PDF の取得でエラーが起きた場合、サーバはクライアントへ次の状態コードを返す。HTTP 502 や HTTP 504 では、原因がサーバの標準エラー出力へ出力される。
 
 - HTTP 404: 対象の文献、添付 PDF、またはローカル・WebDAV 上のファイルが見つからない（PDF 添付以外のアイテムを指定した場合を含む）。取得元での文献と添付 PDF の有無や同期状態を確認する。
-- HTTP 504: 取得元 API、リダイレクト先、または WebDAV サーバへのリクエストが `PDF_DEEPLINK_ZOTERO_TIMEOUT_MS` を超えてタイムアウトした（`local` の `/file` 応答を除き、取得元から HTTP 504 が返った場合を含む）。取得元の応答状況やネットワーク経路を確認し、必要に応じて `PDF_DEEPLINK_ZOTERO_TIMEOUT_MS` を調整する。
-- HTTP 502: 取得元へ到達できない、または取得元や PDF 取得処理でその他のエラー（想定外の応答、許可ディレクトリ外のパス、不正なリダイレクト、非対応または破損した ZIP など）が起きた。サーバの標準エラー出力で原因を確認し、接続先、認証情報、TLS 証明書、許可ディレクトリ、取得方法の設定を見直す。
+- HTTP 504: 取得元 API、リダイレクト先、または WebDAV サーバへのリクエストが `PDF_DEEPLINK_ZOTERO_TIMEOUT_MS` を超えてタイムアウトした。取得元の応答状況やネットワーク経路を確認し、必要に応じて `PDF_DEEPLINK_ZOTERO_TIMEOUT_MS` を調整する。
+- HTTP 502: 取得元へ到達できない、または取得元や PDF 取得処理でその他のエラー（想定外の応答、許可ディレクトリ外のパス、不正なリダイレクト、展開できない ZIP など）が起きた。サーバの標準エラー出力で原因を確認し、接続先、認証情報、TLS 証明書、許可ディレクトリ、取得方法の設定を見直す。
 
 ### 環境変数
 
@@ -106,12 +100,12 @@ Zotero の WebDAV 同期先に配置された ZIP アーカイブから PDF 本�
 | `PDF_DEEPLINK_ZOTERO_LOCAL_DIRS`           | `local` 時必須                                         | なし                     | `local` で読み込みを許可するディレクトリの絶対パス。環境変数 `PATH` と同じ区切り文字（POSIX は `:`、Windows は `;`）で複数指定可。存在しないパスやファイルは起動時にエラーになる                                                             |
 | `PDF_DEEPLINK_ZOTERO_WEBDAV_URL`           | `webdav` 時必須                                        | なし                     | WebDAV 同期先のベース URL（`http://` または `https://`。資格情報・クエリ・フラグメント不可）。配下の `zotero/<8 文字の添付キー>.zip` を要求する                                                                                              |
 | `PDF_DEEPLINK_ZOTERO_WEBDAV_USERNAME`      | 任意（`webdav` 固有）                                  | なし                     | WebDAV の Basic 認証ユーザー名（空文字と `:` は不可）。パスワードと組で指定する                                                                                                                                                              |
-| `PDF_DEEPLINK_ZOTERO_WEBDAV_PASSWORD`      | 任意（`webdav` 固有）                                  | なし                     | WebDAV の Basic 認証パスワード（1 行、空文字不可）。ユーザー名と組で指定する                                                                                                                                                                 |
+| `PDF_DEEPLINK_ZOTERO_WEBDAV_PASSWORD`      | 任意（`webdav` 固有）                                  | なし                     | WebDAV の Basic 認証パスワード。ユーザー名と組で指定する                                                                                                                                                                                     |
 | `PDF_DEEPLINK_ZOTERO_WEBDAV_PASSWORD_FILE` | 任意（`webdav` 固有）                                  | なし                     | `PDF_DEEPLINK_ZOTERO_WEBDAV_PASSWORD` を格納したファイルのパス。ユーザー名と組で指定する                                                                                                                                                     |
 | `PDF_DEEPLINK_ZOTERO_FILE_PATH`            | `template` 時必須                                      | なし                     | PDF 取得パスのテンプレート（例: `/api/users/0/items/{key}/file`）。`{key}` を必ず含める                                                                                                                                                      |
 | `PDF_DEEPLINK_ZOTERO_ENDPOINT`             | 任意                                                   | `http://127.0.0.1:23119` | 取得元 API の接続先。`http://<ホスト>[:<ポート>]`、`https://<ホスト>[:<ポート>]`（パスは `/` のみ）、または `unix:<パス>`                                                                                                                    |
 | `PDF_DEEPLINK_ZOTERO_API_PATH`             | 任意                                                   | `/api/users/0`           | 取得元 API のベースパス（末尾の `/` は取り除かれる）                                                                                                                                                                                         |
-| `PDF_DEEPLINK_ZOTERO_API_KEY`              | 任意                                                   | なし                     | 取得元 API へ `Zotero-API-Key` ヘッダで付与する API キー（1 行、空文字不可）。`web` のリダイレクト先へは送信されない                                                                                                                         |
+| `PDF_DEEPLINK_ZOTERO_API_KEY`              | 任意                                                   | なし                     | 取得元 API へ `Zotero-API-Key` ヘッダで付与する API キー。`web` のリダイレクト先へは送信されない                                                                                                                                             |
 | `PDF_DEEPLINK_ZOTERO_API_KEY_FILE`         | 任意                                                   | なし                     | `PDF_DEEPLINK_ZOTERO_API_KEY` を格納したファイルのパス                                                                                                                                                                                       |
 | `PDF_DEEPLINK_ZOTERO_TIMEOUT_MS`           | 任意                                                   | `30000`                  | 取得元 API、リダイレクト先、WebDAV サーバへの各リクエストのタイムアウト（ミリ秒、正の整数）。超過時は HTTP 504                                                                                                                               |
 | `PDF_DEEPLINK_LISTEN`                      | 任意                                                   | `127.0.0.1:8787`         | サーバの待ち受け先。`<ホスト>:<ポート>` または Unix ドメインソケット `unix:<パス>` を指定する。Unix ドメインソケットでは起動時に既存の同名ファイルが削除され、パーミッション `0660` で作成される                                             |

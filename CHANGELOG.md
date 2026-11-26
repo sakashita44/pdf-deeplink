@@ -11,13 +11,12 @@
     - `web`: zotero.org の Web API に API キーを付けて要求し、転送先から取得する
     - `webdav`: Zotero が WebDAV に置いた `<キー>.zip` から PDF を取り出す
     - `template`: 従来の、PDF を返す HTTP の経路のテンプレートから取得する
-- `PDF_DEEPLINK_ZOTERO_ENDPOINT` に `https://` を指定できるようにした
+- `PDF_DEEPLINK_ZOTERO_ENDPOINT` に `https://` を指定できるようにした。zotero.org の Web API から一覧と書誌を取得できる。zotero.org にファイルを置かず WebDAV で同期しているライブラリでも、PDF の添付がある文献を一覧に表示する
 - API キーを `PDF_DEEPLINK_ZOTERO_API_KEY` または `PDF_DEEPLINK_ZOTERO_API_KEY_FILE` で渡すと、一覧、書誌、PDF の要求に付けるようにした。WebDAV の資格情報も環境変数またはファイルで渡せる
 
 ### Changed
 
 - `PDF_DEEPLINK_ZOTERO_FILE_PATH` を、取得方法が `template` の場合だけ必須とした。`PDF_DEEPLINK_ZOTERO_FILE_SOURCE` を指定せず `PDF_DEEPLINK_ZOTERO_FILE_PATH` だけを指定した設定は、従来どおり動作する
-- 一覧の取得元が PDF の添付を `links.attachment` で示さない場合（zotero.org にファイルを置いていないライブラリの Web API など）、添付の一覧から PDF を探すようにした
 
 ## [1.0.0] - 2026-11-26
 
