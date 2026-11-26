@@ -11,8 +11,7 @@ if (location.pathname === '/view') {
             const message = document.createElement('p');
             message.className = 'banner';
             message.setAttribute('role', 'alert');
-            message.textContent =
-                'PDF を表示できませんでした。時間をおいて開き直してください。解決しない場合は、サーバの管理者に連絡してください。';
+            message.textContent = 'PDF を表示できませんでした。';
             app.prepend(message);
         },
     );

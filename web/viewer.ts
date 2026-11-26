@@ -105,16 +105,13 @@ export async function renderViewer(
     const link = parsed.ok ? parsed.link : null;
     const src = link?.src ?? params.get('src') ?? '';
     if (!isValidSrc(src)) {
-        showBanner(
-            ui.banner,
-            'リンクから文献を特定できません。リンクが途中で切れていないか確認し、元のリンクをコピーし直してください。',
-        );
+        showBanner(ui.banner, 'リンクから文献を特定できませんでした。');
         return;
     }
     if (!link && [...params.keys()].some((key) => key !== 'src')) {
         showBanner(
             ui.banner,
-            'リンクの一部が正しくないため、該当箇所を表示できません。文書の先頭を表示しています。リンクが途中で切れていないか確認し、元のリンクをコピーし直してください。',
+            'リンクの一部が正しくないため、該当箇所を表示できません。文書の先頭を表示しています。',
         );
     }
 
@@ -128,7 +125,7 @@ export async function renderViewer(
             ui.banner,
             fileResponse.status === 404
                 ? 'リンクが指す PDF が見つかりません。文献や PDF が削除されたか、別の PDF に差し替えられた可能性があります。'
-                : `PDF を読み込めませんでした（HTTP ${fileResponse.status}）。時間をおいて開き直してください。解決しない場合は、サーバの管理者に連絡してください。`,
+                : `PDF を読み込めませんでした（HTTP ${fileResponse.status}）。`,
         );
         return;
     }
@@ -285,7 +282,6 @@ export async function renderViewer(
         situation: 'updated' | 'missing',
     ): void {
         const where = `p.${target.label ?? target.page}`;
-        ui.banner.replaceChildren();
         const message = document.createElement('p');
         const search = '「目印で検索」で該当箇所を探してください。';
         if (situation === 'missing') {
@@ -331,8 +327,7 @@ export async function renderViewer(
                 }),
             );
         }
-        ui.banner.append(message, detail, actions);
-        ui.banner.hidden = false;
+        openBanner(ui.banner, [message, detail, actions]);
     }
 
     function pageOf(node: Node | null): {
@@ -452,7 +447,10 @@ export async function renderViewer(
             await navigator.clipboard.writeText(text);
             toast(ui.toast, done);
         } catch {
-            window.prompt('コピーしてください', text);
+            window.prompt(
+                'クリップボードにコピーできませんでした。表示されている内容を手動でコピーしてください。',
+                text,
+            );
         }
     }
 
@@ -615,7 +613,21 @@ async function digest(data: Uint8Array<ArrayBuffer>): Promise<string> {
 }
 
 function showBanner(banner: HTMLElement, message: string): void {
-    banner.textContent = message;
+    const text = document.createElement('p');
+    text.textContent = message;
+    openBanner(banner, [text]);
+}
+
+function openBanner(banner: HTMLElement, content: HTMLElement[]): void {
+    const body = document.createElement('div');
+    body.className = 'banner-body';
+    body.append(...content);
+    const close = button('×', () => {
+        banner.hidden = true;
+    });
+    close.className = 'banner-close';
+    close.setAttribute('aria-label', '閉じる');
+    banner.replaceChildren(body, close);
     banner.hidden = false;
 }
 
