@@ -98,11 +98,11 @@ async function handleApi(
             // ビューアは fetch() でバイト列を読む。この URL を直接開いた場合に、ブラウザが同一オリジン上で PDF をインライン表示しないようにする。
             'Content-Disposition': 'attachment',
             'Content-Security-Policy': "default-src 'none'; sandbox",
-            ...(upstream.headers['content-length']
-                ? { 'Content-Length': upstream.headers['content-length'] }
-                : {}),
+            ...(upstream.length === undefined
+                ? {}
+                : { 'Content-Length': String(upstream.length) }),
         });
-        await pipeline(upstream, res, { signal });
+        await pipeline(upstream.stream, res, { signal });
         return;
     }
     const metadata = await zotero.metadata(key, signal);
