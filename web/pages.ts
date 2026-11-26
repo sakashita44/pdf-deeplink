@@ -6,6 +6,7 @@ export interface PageViewLike {
     div: HTMLDivElement;
     pdfPage: { view: number[]; rotate: number } | null;
     viewport: PageViewport;
+    renderingState: number;
     setPdfPage(pdfPage: PDFPageProxy): void;
 }
 

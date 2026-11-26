@@ -147,7 +147,6 @@ export async function renderViewer(
                 eventBus,
                 linkService,
                 pages,
-                container: ui.container,
                 banner: ui.banner,
             },
             link,

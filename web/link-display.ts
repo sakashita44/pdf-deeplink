@@ -16,7 +16,14 @@ import { button, openBanner } from './ui.ts';
 
 const HIGHLIGHT_MS = 8000;
 
-type Region = PageRects & { geometry: PageGeometry };
+// PDF.js の RenderingStates.FINISHED
+const RENDERING_FINISHED = 3;
+
+type Region = PageRects & {
+    geometry: PageGeometry;
+    shownAt: number | null;
+    expired: boolean;
+};
 
 export interface LinkDisplayContext {
     pdf: PDFDocumentProxy;
@@ -25,39 +32,41 @@ export interface LinkDisplayContext {
     eventBus: EventBus;
     linkService: PDFLinkService;
     pages: Pages;
-    container: HTMLElement;
     banner: HTMLElement;
 }
 
 export function showLink(context: LinkDisplayContext, link: PdfLink): void {
-    const { pdf, pdfSha256, viewer, eventBus, pages, container } = context;
+    const { pdf, pdfSha256, viewer, eventBus, pages } = context;
     const situation = linkSituation(link, pdf.numPages, pdfSha256);
     if (situation === 'missing') {
         showNotice(context, link, situation);
         return;
     }
 
-    let highlight: { regions: Region[]; shownAt: number | null } | null = null;
+    let regions: Region[] = [];
 
     // 拡大率の変更などで PDF.js がページを描画し直すと、PDF.js 以外が追加した要素はページから取り除かれるため、描画のたびに強調を貼り直す。
     eventBus.on('pagerendered', (event: { pageNumber: number }) => {
-        const region = highlight?.regions.find(
-            ({ page }) => page === event.pageNumber,
-        );
-        if (region) draw(region);
+        const region = regions.find(({ page }) => page === event.pageNumber);
+        if (region) draw(region, true);
     });
 
     void (async () => {
-        const regions = await Promise.all(
+        const loaded = await Promise.all(
             link.regions.map(async (region) => {
                 const pdfPage = await pdf.getPage(region.page);
                 const view = pages.view(region.page);
                 // PDF.js は 2 ページ目以降のページ情報を遅れて設定し、それまでは 1 ページ目の寸法で位置を計算する。移動と強調の描画の前に、対象の各ページの情報を設定する。
                 if (view && !view.pdfPage) view.setPdfPage(pdfPage);
-                return { ...region, geometry: geometryOf(pdfPage) };
+                return {
+                    ...region,
+                    geometry: geometryOf(pdfPage),
+                    shownAt: null,
+                    expired: false,
+                };
             }),
         );
-        const first = regions[0]!;
+        const first = loaded[0]!;
         const [x, y] = first.rects[0]!;
         // XYZ の移動先は PDF のユーザー空間の座標で指定する。
         const [left, top] = displayToUser(first.geometry, [x - 24, y - 48]);
@@ -66,23 +75,29 @@ export function showLink(context: LinkDisplayContext, link: PdfLink): void {
             destArray: [null, { name: 'XYZ' }, left, top, null],
             ignoreDestinationZoom: true,
         });
-        highlight = { regions, shownAt: null };
-        regions.forEach(draw);
+        regions = loaded;
+        for (const region of regions)
+            draw(
+                region,
+                pages.view(region.page)?.renderingState === RENDERING_FINISHED,
+            );
     })();
 
     if (situation === 'updated') showNotice(context, link, situation);
 
-    function draw(region: Region): void {
-        if (!highlight) return;
+    // 強調を消すまでの時間は、ページごとに、そのページが描画された時点から数える。離れたページを指すリンクでも、移動した先のページで強調が見えるようにする。
+    function draw(region: Region, rendered: boolean): void {
+        if (region.expired) return;
         const view = pages.view(region.page);
         if (!view?.pdfPage) return;
-        if (highlight.shownAt === null) {
-            highlight.shownAt = Date.now();
+        if (region.shownAt === null && rendered) {
+            region.shownAt = Date.now();
             window.setTimeout(() => {
-                highlight = null;
-                container
-                    .querySelectorAll('.link-highlight')
-                    .forEach((layer) => layer.remove());
+                region.expired = true;
+                pages
+                    .view(region.page)
+                    ?.div.querySelector('.link-highlight')
+                    ?.remove();
             }, HIGHLIGHT_MS);
         }
         view.div.querySelector('.link-highlight')?.remove();
@@ -90,7 +105,7 @@ export function showLink(context: LinkDisplayContext, link: PdfLink): void {
         layer.className = 'link-highlight';
         layer.style.setProperty(
             '--elapsed',
-            `${Date.now() - highlight.shownAt}ms`,
+            `${region.shownAt === null ? 0 : Date.now() - region.shownAt}ms`,
         );
         for (const rect of region.rects) {
             const [x1, y1, x2, y2] = toUserSpace(region.geometry, rect);

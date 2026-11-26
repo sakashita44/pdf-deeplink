@@ -25,6 +25,15 @@ test('pagesText: ページラベルがなければページ番号の範囲にす
     assert.equal(pagesText({ regions: two }), 'p.3–4');
 });
 
+test('pagesText: 連続しないページは連続する部分ごとにまとめて並べる', () => {
+    const page = (n: number) => ({ page: n, rects: [[0, 0, 1, 1] as const] });
+    assert.equal(
+        pagesText({ regions: [page(3), page(4), page(10)] }),
+        'p.3–4, 10',
+    );
+    assert.equal(pagesText({ regions: [page(3), page(10)] }), 'p.3, 10');
+});
+
 test('labelRange: 最初と最後のページのラベルを結ぶ', () => {
     assert.equal(labelRange(one, labelOf), '1');
     assert.equal(labelRange(two, labelOf), '1–2');

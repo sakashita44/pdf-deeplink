@@ -41,9 +41,15 @@ export function pagesText(target: {
     label?: string;
 }): string {
     if (target.label) return `p.${target.label}`;
-    const start = firstPage(target);
-    const end = lastPage(target);
-    return start === end ? `p.${start}` : `p.${start}–${end}`;
+    const runs: [number, number][] = [];
+    for (const { page } of target.regions) {
+        const last = runs.at(-1);
+        if (last && page === last[1] + 1) last[1] = page;
+        else runs.push([page, page]);
+    }
+    return `p.${runs
+        .map(([start, end]) => (start === end ? `${start}` : `${start}–${end}`))
+        .join(', ')}`;
 }
 
 export function linkSituation(
