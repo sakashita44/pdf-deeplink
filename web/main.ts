@@ -5,14 +5,17 @@ const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('#app is missing');
 
 if (location.pathname === '/view') {
-    renderViewer(app, new URLSearchParams(location.search)).catch((error: unknown) => {
-        console.error(error);
-        const message = document.createElement('p');
-        message.className = 'banner';
-        message.setAttribute('role', 'alert');
-        message.textContent = 'PDF を表示できませんでした。接続先とファイルを確認してください。';
-        app.prepend(message);
-    });
+    renderViewer(app, new URLSearchParams(location.search)).catch(
+        (error: unknown) => {
+            console.error(error);
+            const message = document.createElement('p');
+            message.className = 'banner';
+            message.setAttribute('role', 'alert');
+            message.textContent =
+                'PDF を表示できませんでした。接続先とファイルを確認してください。';
+            app.prepend(message);
+        },
+    );
 } else {
     renderList(app);
 }

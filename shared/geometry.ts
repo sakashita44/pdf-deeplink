@@ -40,19 +40,34 @@ export function displayToUser(page: PageGeometry, [dx, dy]: Point): Point {
 export function toLinkRect(page: PageGeometry, a: Point, b: Point): Rect {
     const [ax, ay] = userToDisplay(page, a);
     const [bx, by] = userToDisplay(page, b);
-    return [Math.min(ax, bx), Math.min(ay, by), Math.abs(ax - bx), Math.abs(ay - by)];
+    return [
+        Math.min(ax, bx),
+        Math.min(ay, by),
+        Math.abs(ax - bx),
+        Math.abs(ay - by),
+    ];
 }
 
-export function toUserSpace(page: PageGeometry, [x, y, w, h]: Rect): [number, number, number, number] {
+export function toUserSpace(
+    page: PageGeometry,
+    [x, y, w, h]: Rect,
+): [number, number, number, number] {
     const [ax, ay] = displayToUser(page, [x, y]);
     const [bx, by] = displayToUser(page, [x + w, y + h]);
-    return [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)];
+    return [
+        Math.min(ax, bx),
+        Math.min(ay, by),
+        Math.max(ax, bx),
+        Math.max(ay, by),
+    ];
 }
 
 export function mergeLineRects(rects: Rect[]): Rect[] {
     const lines: { bounds: Rect; rects: Rect[] }[] = [];
     for (const rect of [...rects].sort((a, b) => a[1] - b[1] || a[0] - b[0])) {
-        const line = lines.find((candidate) => sameLine(candidate.bounds, rect));
+        const line = lines.find((candidate) =>
+            sameLine(candidate.bounds, rect),
+        );
         if (line) {
             line.rects.push(rect);
             line.bounds = union(line.bounds, rect);
@@ -65,7 +80,11 @@ export function mergeLineRects(rects: Rect[]): Rect[] {
         let current: Rect | null = null;
         // 0.6 は、語間の空白を結合し、段組の列間は分けるための経験的な閾値で、実測による検証はしていない。
         for (const rect of line.rects.sort((a, b) => a[0] - b[0])) {
-            if (current && rect[0] - (current[0] + current[2]) <= Math.min(current[3], rect[3]) * 0.6) {
+            if (
+                current &&
+                rect[0] - (current[0] + current[2]) <=
+                    Math.min(current[3], rect[3]) * 0.6
+            ) {
                 current = union(current, rect);
             } else {
                 if (current) merged.push(current);
@@ -82,7 +101,12 @@ export function mergeLineRects(rects: Rect[]): Rect[] {
 function union(a: Rect, b: Rect): Rect {
     const left = Math.min(a[0], b[0]);
     const top = Math.min(a[1], b[1]);
-    return [left, top, Math.max(a[0] + a[2], b[0] + b[2]) - left, Math.max(a[1] + a[3], b[1] + b[3]) - top];
+    return [
+        left,
+        top,
+        Math.max(a[0] + a[2], b[0] + b[2]) - left,
+        Math.max(a[1] + a[3], b[1] + b[3]) - top,
+    ];
 }
 
 function normalizeRotation(rotation: number): number {

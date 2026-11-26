@@ -8,7 +8,9 @@ interface Vectors {
     format: { name: string; link: PdfLink; query: string }[];
 }
 
-const vectors: Vectors = JSON.parse(readFileSync(new URL('../spec/link-vectors.json', import.meta.url), 'utf8'));
+const vectors: Vectors = JSON.parse(
+    readFileSync(new URL('../spec/link-vectors.json', import.meta.url), 'utf8'),
+);
 
 for (const vector of vectors.parse) {
     test(`parse: ${vector.name}`, () => {

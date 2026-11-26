@@ -1,17 +1,30 @@
 import { chmodSync, existsSync, unlinkSync } from 'node:fs';
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import {
+    createServer,
+    type IncomingMessage,
+    type ServerResponse,
+} from 'node:http';
 import { pipeline } from 'node:stream/promises';
 import { isValidSrc } from '../shared/link.ts';
 import { loadConfig } from './config.ts';
 import { createStaticHandler } from './static.ts';
-import { SORT_KEYS, UpstreamError, ZoteroSource, type SearchOptions, type SortKey } from './zotero.ts';
+import {
+    SORT_KEYS,
+    UpstreamError,
+    ZoteroSource,
+    type SearchOptions,
+    type SortKey,
+} from './zotero.ts';
 
 const config = loadConfig(process.env);
 const zotero = new ZoteroSource(config.zotero);
 const serveStatic = createStaticHandler(config.staticDir);
 
 const DOCUMENT_ROUTE = /^\/app\/documents\/([^/]+)(\/file)?$/;
-const SECURITY_HEADERS = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
+const SECURITY_HEADERS = {
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+};
 
 class RequestError extends Error {
     readonly status: number;
@@ -29,7 +42,8 @@ const server = createServer(async (req, res) => {
     });
     try {
         checkOrigin(req);
-        if (req.method !== 'GET') throw new RequestError(405, 'method not allowed');
+        if (req.method !== 'GET')
+            throw new RequestError(405, 'method not allowed');
         const url = parseUrl(req.url);
         if (!url.pathname.startsWith('/app/')) {
             if (serveStatic?.(url.pathname, res)) return;
@@ -42,20 +56,34 @@ const server = createServer(async (req, res) => {
             res.destroy(error as Error);
             return;
         }
-        if (error instanceof RequestError) return sendJson(res, error.status, { error: error.message });
+        if (error instanceof RequestError)
+            return sendJson(res, error.status, { error: error.message });
         if (error instanceof UpstreamError) {
             console.error(error.message);
-            if (error.status === 404) return sendJson(res, 404, { error: 'not found' });
-            return sendJson(res, error.status === 504 ? 504 : 502, { error: 'the document source returned an error' });
+            if (error.status === 404)
+                return sendJson(res, 404, { error: 'not found' });
+            return sendJson(res, error.status === 504 ? 504 : 502, {
+                error: 'the document source returned an error',
+            });
         }
         console.error(error);
-        return sendJson(res, 502, { error: 'the document source is unreachable' });
+        return sendJson(res, 502, {
+            error: 'the document source is unreachable',
+        });
     }
 });
 
-async function handleApi(url: URL, res: ServerResponse, signal: AbortSignal): Promise<void> {
+async function handleApi(
+    url: URL,
+    res: ServerResponse,
+    signal: AbortSignal,
+): Promise<void> {
     if (url.pathname === '/app/documents') {
-        return sendJson(res, 200, await zotero.search(parseSearchOptions(url.searchParams), signal));
+        return sendJson(
+            res,
+            200,
+            await zotero.search(parseSearchOptions(url.searchParams), signal),
+        );
     }
     const match = DOCUMENT_ROUTE.exec(url.pathname);
     if (!match) throw new RequestError(404, 'not found');
@@ -70,7 +98,9 @@ async function handleApi(url: URL, res: ServerResponse, signal: AbortSignal): Pr
             // ビューアは fetch() でバイト列を読む。この URL を直接開いた場合に、ブラウザが同一オリジン上で PDF をインライン表示しないようにする。
             'Content-Disposition': 'attachment',
             'Content-Security-Policy': "default-src 'none'; sandbox",
-            ...(upstream.headers['content-length'] ? { 'Content-Length': upstream.headers['content-length'] } : {}),
+            ...(upstream.headers['content-length']
+                ? { 'Content-Length': upstream.headers['content-length'] }
+                : {}),
         });
         await pipeline(upstream, res, { signal });
         return;
@@ -83,18 +113,27 @@ async function handleApi(url: URL, res: ServerResponse, signal: AbortSignal): Pr
 // ループバックで待ち受けていても、DNS リバインディングや他サイトのページからブラウザ経由で要求が届く。Sec-Fetch-Site はスクリプトから設定できないヘッダである。
 function checkOrigin(req: IncomingMessage): void {
     const host = req.headers.host?.toLowerCase().replace(/:\d{1,5}$/, '');
-    if (!host || !config.allowedHosts.has(host)) throw new RequestError(403, 'host is not allowed');
+    if (!host || !config.allowedHosts.has(host))
+        throw new RequestError(403, 'host is not allowed');
     const fetchSite = req.headers['sec-fetch-site'];
-    if (fetchSite !== undefined && fetchSite !== 'same-origin' && fetchSite !== 'none') {
+    if (
+        fetchSite !== undefined &&
+        fetchSite !== 'same-origin' &&
+        fetchSite !== 'none'
+    ) {
         throw new RequestError(403, 'cross-site requests are not accepted');
     }
 }
 
 function parseSearchOptions(params: URLSearchParams): SearchOptions {
     const sort = params.get('sort') ?? 'dateModified';
-    const direction = params.get('direction') ?? (sort === 'dateModified' || sort === 'dateAdded' ? 'desc' : 'asc');
-    if (!(SORT_KEYS as readonly string[]).includes(sort)) throw new RequestError(400, 'invalid sort');
-    if (direction !== 'asc' && direction !== 'desc') throw new RequestError(400, 'invalid direction');
+    const direction =
+        params.get('direction') ??
+        (sort === 'dateModified' || sort === 'dateAdded' ? 'desc' : 'asc');
+    if (!(SORT_KEYS as readonly string[]).includes(sort))
+        throw new RequestError(400, 'invalid sort');
+    if (direction !== 'asc' && direction !== 'desc')
+        throw new RequestError(400, 'invalid direction');
     return {
         query: params.get('q') ?? '',
         sort: sort as SortKey,
@@ -104,11 +143,18 @@ function parseSearchOptions(params: URLSearchParams): SearchOptions {
     };
 }
 
-function integerParam(params: URLSearchParams, name: string, fallback: number, min: number, max: number): number {
+function integerParam(
+    params: URLSearchParams,
+    name: string,
+    fallback: number,
+    min: number,
+    max: number,
+): number {
     const text = params.get(name);
     if (text === null || text === '') return fallback;
     const value = Number(text);
-    if (!/^\d+$/.test(text) || value < min || value > max) throw new RequestError(400, `invalid ${name}`);
+    if (!/^\d+$/.test(text) || value < min || value > max)
+        throw new RequestError(400, `invalid ${name}`);
     return value;
 }
 
@@ -129,7 +175,10 @@ function decodeSegment(segment: string): string {
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
-    res.writeHead(status, { ...SECURITY_HEADERS, 'Content-Type': 'application/json; charset=utf-8' });
+    res.writeHead(status, {
+        ...SECURITY_HEADERS,
+        'Content-Type': 'application/json; charset=utf-8',
+    });
     res.end(JSON.stringify(body));
 }
 
@@ -142,5 +191,7 @@ if ('socketPath' in config.listen) {
     });
 } else {
     const { host, port } = config.listen;
-    server.listen(port, host, () => console.log(`listening on http://${host}:${port}`));
+    server.listen(port, host, () =>
+        console.log(`listening on http://${host}:${port}`),
+    );
 }
