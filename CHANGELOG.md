@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-26
+
 ### Added
 
 - 警告とエラーのバナーを閉じるボタン
@@ -41,5 +43,6 @@
 - 出典（著者、発行年、タイトル、掲載誌、DOI、ページ、目印）のコピー
 - コンテナで実行するための Dockerfile と、Unix ソケットでの待ち受け
 
-[Unreleased]: https://github.com/sakashita44/pdf-deeplink/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/sakashita44/pdf-deeplink/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/sakashita44/pdf-deeplink/compare/v0.1.0...v1.0.0
 [0.1.0]: https://github.com/sakashita44/pdf-deeplink/releases/tag/v0.1.0
