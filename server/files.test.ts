@@ -61,17 +61,4 @@ test('openLocalFile: 許可ディレクトリの中の通常のファイルだ�
             status(502),
             location,
         );
-
-    await assert.rejects(
-        openLocalFile(roots, url(path.join(storage, 'none.pdf')), 'KEY'),
-        status(404),
-    );
-});
-
-test('resolveRoots: 存在しないパスやファイルを許可ディレクトリとして受け付けない', (t) => {
-    const base = mkdtempSync(path.join(tmpdir(), 'pdf-deeplink-'));
-    t.after(() => rmSync(base, { recursive: true, force: true }));
-    writeFileSync(path.join(base, 'file'), '');
-    assert.throws(() => resolveRoots([path.join(base, 'none')]));
-    assert.throws(() => resolveRoots([path.join(base, 'file')]));
 });

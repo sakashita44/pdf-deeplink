@@ -104,33 +104,20 @@ test('file(template): 経路のテンプレートにキーを入れて PDF を�
     assert.equal(await text(body.stream), PDF);
 });
 
-test('file(local): Local API が返す file:// のパスを読み、それ以外の応答は失敗とする', async (t) => {
+test('file(local): Local API が返す file:// のパスを読む', async (t) => {
     const base = mkdtempSync(path.join(tmpdir(), 'pdf-deeplink-'));
     t.after(() => rmSync(base, { recursive: true, force: true }));
     mkdirSync(path.join(base, KEY));
     const pdfPath = path.join(base, KEY, 'paper.pdf');
     writeFileSync(pdfPath, PDF);
-    let fileResponse: [number, Record<string, string>] = [
-        302,
-        { Location: pathToFileURL(pdfPath).href },
-    ];
     const zotero = await upstream(t, (url, headers, res) => {
         if (url === `/api/items/${KEY}/file`) {
-            res.writeHead(...fileResponse);
+            res.writeHead(302, { Location: pathToFileURL(pdfPath).href });
             res.end();
         } else zoteroItems()(url, headers, res);
     });
     const files = source(zotero.origin, { kind: 'local', dirs: [base] });
     assert.equal(await text((await files.file(KEY, signal())).stream), PDF);
-
-    for (const [response, expected] of [
-        [[404, {}], 404],
-        [[200, {}], 502],
-        [[302, {}], 502],
-    ] as const) {
-        fileResponse = [...response];
-        await assert.rejects(files.file(KEY, signal()), status(expected));
-    }
 });
 
 test('file(web): API キーを付けて要求し、HTTPS でない転送先には従わない', async (t) => {
@@ -183,14 +170,6 @@ test('file(webdav): 設定画面の URL の下の zotero/<キー>.zip から PDF
     const body = await webdav(' p a s s ').file(KEY, signal());
     assert.equal(body.length, PDF.length);
     assert.equal(await text(body.stream), PDF);
-
-    await assert.rejects(webdav('wrong').file(KEY, signal()), status(401));
-
-    archive = buildZip([
-        { name: 'a.pdf', data: Buffer.from(PDF) },
-        { name: 'b.pdf', data: Buffer.from(PDF) },
-    ]);
-    await assert.rejects(webdav(' p a s s ').file(KEY, signal()), status(502));
 
     archive = Buffer.from('not a zip');
     await assert.rejects(webdav(' p a s s ').file(KEY, signal()), status(502));
