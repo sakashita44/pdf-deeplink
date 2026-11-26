@@ -29,6 +29,7 @@ export interface SearchResult {
 
 const PAGE_LIMIT = 100;
 const MAX_SCANNED_ITEMS = 5000;
+const MAX_JSON_BYTES = 32 * 1024 * 1024;
 const SEARCH_CACHE_MS = 60_000;
 const SEARCH_CACHE_ENTRIES = 16;
 
@@ -155,12 +156,13 @@ export class ZoteroSource {
                 signal,
             );
             documents.push(...items.flatMap(pdfSummary));
-            const reported = Number(headers['total-results']);
-            total = Number.isFinite(reported)
-                ? reported
-                : items.length < PAGE_LIMIT
-                  ? start + items.length
-                  : Infinity;
+            const reported = headers['total-results'];
+            total =
+                typeof reported === 'string' && /^\d+$/.test(reported)
+                    ? Number(reported)
+                    : items.length < PAGE_LIMIT
+                      ? start + items.length
+                      : Infinity;
             if (items.length === 0) break;
             start += items.length;
         }
@@ -194,6 +196,9 @@ export class ZoteroSource {
     }
 
     async file(key: string, signal: AbortSignal): Promise<IncomingMessage> {
+        const attachment = await this.#item(key, signal);
+        if (!attachment || !isPdf(attachment))
+            throw new UpstreamError(404, `${key} is not a PDF attachment`);
         const response = await this.#request(
             this.#options.filePath.replace('{key}', key),
             signal,
@@ -228,13 +233,25 @@ export class ZoteroSource {
         signal: AbortSignal,
     ): Promise<{ body: T; headers: IncomingHttpHeaders }> {
         const response = await this.#request(path, signal);
-        const chunks: Buffer[] = [];
-        for await (const chunk of response) chunks.push(chunk as Buffer);
         if (response.statusCode !== 200) {
+            response.resume();
             throw new UpstreamError(
                 response.statusCode ?? 502,
                 `request returned ${response.statusCode} for ${path}`,
             );
+        }
+        const chunks: Buffer[] = [];
+        let size = 0;
+        for await (const chunk of response) {
+            size += (chunk as Buffer).length;
+            if (size > MAX_JSON_BYTES) {
+                response.destroy();
+                throw new UpstreamError(
+                    502,
+                    `response is too large for ${path}`,
+                );
+            }
+            chunks.push(chunk as Buffer);
         }
         return {
             body: JSON.parse(Buffer.concat(chunks).toString('utf8')) as T,

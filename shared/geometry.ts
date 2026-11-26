@@ -63,16 +63,14 @@ export function toUserSpace(
 }
 
 export function mergeLineRects(rects: Rect[]): Rect[] {
-    const lines: { bounds: Rect; rects: Rect[] }[] = [];
+    const lines: { seed: Rect; bounds: Rect; rects: Rect[] }[] = [];
     for (const rect of [...rects].sort((a, b) => a[1] - b[1] || a[0] - b[0])) {
-        const line = lines.find((candidate) =>
-            sameLine(candidate.bounds, rect),
-        );
+        const line = lines.find((candidate) => sameLine(candidate.seed, rect));
         if (line) {
             line.rects.push(rect);
             line.bounds = union(line.bounds, rect);
         } else {
-            lines.push({ bounds: rect, rects: [rect] });
+            lines.push({ seed: rect, bounds: rect, rects: [rect] });
         }
     }
     const merged: Rect[] = [];
@@ -96,6 +94,63 @@ export function mergeLineRects(rects: Rect[]): Rect[] {
     return merged
         .map((rect) => rect.map(roundCoordinate) as unknown as Rect)
         .filter(([, , w, h]) => w > 0 && h > 0);
+}
+
+export function mergeSelectionRects(rects: Rect[]): Rect[] {
+    const columns: { lines: Rect[]; bounds: Rect }[] = [];
+    for (const line of mergeLineRects(rects)) {
+        const column = columns.find((candidate) => sameColumn(candidate, line));
+        if (column) {
+            column.lines.push(line);
+            column.bounds = union(column.bounds, line);
+        } else {
+            columns.push({ lines: [line], bounds: line });
+        }
+    }
+    const firstIndex = (bounds: Rect) => {
+        const index = rects.findIndex((rect) =>
+            contains(bounds, [rect[0] + rect[2] / 2, rect[1] + rect[3] / 2]),
+        );
+        return index === -1 ? rects.length : index;
+    };
+    return columns
+        .map((column) => ({ ...column, order: firstIndex(column.bounds) }))
+        .sort((a, b) => a.order - b.order)
+        .flatMap(({ lines }) =>
+            lines.length <= 2
+                ? lines
+                : [lines[0]!, lines.slice(1, -1).reduce(union), lines.at(-1)!],
+        )
+        .map((rect) => rect.map(roundCoordinate) as unknown as Rect);
+}
+
+// 横方向に狭いほうの幅の半分以上が重なり、行間が行の高さの 1.5 倍以内であれば、同じ段組の続きの行とみなす。2 行目以降は、それまでの行の左右端から行の高さを超えてはみ出す行を、全幅の見出しや脚注として別の段組に分ける。経験的な閾値で、実測による検証はしていない。
+function sameColumn(
+    column: { lines: Rect[]; bounds: Rect },
+    below: Rect,
+): boolean {
+    const above = column.lines.at(-1)!;
+    const overlap =
+        Math.min(above[0] + above[2], below[0] + below[2]) -
+        Math.max(above[0], below[0]);
+    const gap = below[1] - (above[1] + above[3]);
+    const height = Math.max(above[3], below[3]);
+    if (
+        overlap < Math.min(above[2], below[2]) * 0.5 ||
+        gap < -Math.min(above[3], below[3]) * 0.5 ||
+        gap > height * 1.5
+    )
+        return false;
+    if (column.lines.length < 2) return true;
+    const [left, , width] = column.bounds;
+    return (
+        below[0] >= left - height &&
+        below[0] + below[2] <= left + width + height
+    );
+}
+
+function contains([x, y, w, h]: Rect, [px, py]: Point): boolean {
+    return px >= x && px <= x + w && py >= y && py <= y + h;
 }
 
 function union(a: Rect, b: Rect): Rect {

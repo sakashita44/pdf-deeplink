@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
     mergeLineRects,
+    mergeSelectionRects,
     toLinkRect,
     toUserSpace,
     type PageGeometry,
@@ -25,6 +26,7 @@ interface Vectors {
         userSpace: number[];
     }[];
     mergeLineRects: { name: string; rects: Rect[]; merged: Rect[] }[];
+    mergeSelectionRects: { name: string; rects: Rect[]; merged: Rect[] }[];
 }
 
 const vectors: Vectors = JSON.parse(
@@ -55,5 +57,11 @@ for (const vector of vectors.toUserSpace) {
 for (const vector of vectors.mergeLineRects) {
     test(`mergeLineRects: ${vector.name}`, () => {
         assert.deepEqual(mergeLineRects(vector.rects), vector.merged);
+    });
+}
+
+for (const vector of vectors.mergeSelectionRects) {
+    test(`mergeSelectionRects: ${vector.name}`, () => {
+        assert.deepEqual(mergeSelectionRects(vector.rects), vector.merged);
     });
 }

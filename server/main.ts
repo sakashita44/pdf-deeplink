@@ -41,10 +41,10 @@ const server = createServer(async (req, res) => {
         if (!res.writableFinished) controller.abort();
     });
     try {
-        checkOrigin(req);
+        const url = parseUrl(req.url);
+        checkOrigin(req, url);
         if (req.method !== 'GET')
             throw new RequestError(405, 'method not allowed');
-        const url = parseUrl(req.url);
         if (!url.pathname.startsWith('/app/')) {
             if (serveStatic?.(url.pathname, res)) return;
             throw new RequestError(404, 'not found');
@@ -111,10 +111,16 @@ async function handleApi(
 }
 
 // ループバックで待ち受けていても、DNS リバインディングや他サイトのページからブラウザ経由で要求が届く。Sec-Fetch-Site はスクリプトから設定できないヘッダである。
-function checkOrigin(req: IncomingMessage): void {
+function checkOrigin(req: IncomingMessage, url: URL): void {
     const host = req.headers.host?.toLowerCase().replace(/:\d{1,5}$/, '');
     if (!host || !config.allowedHosts.has(host))
         throw new RequestError(403, 'host is not allowed');
+    if (
+        !url.pathname.startsWith('/app/') &&
+        req.headers['sec-fetch-mode'] === 'navigate' &&
+        req.headers['sec-fetch-dest'] === 'document'
+    )
+        return;
     const fetchSite = req.headers['sec-fetch-site'];
     if (
         fetchSite !== undefined &&

@@ -1,6 +1,7 @@
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import type { ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
+import { pipeline } from 'node:stream';
 
 const CONTENT_TYPES: Record<string, string> = {
     '.html': 'text/html; charset=utf-8',
@@ -36,8 +37,12 @@ export function createStaticHandler(
                 ? 'public, max-age=31536000, immutable'
                 : 'no-cache',
             'X-Content-Type-Options': 'nosniff',
+            'Content-Security-Policy': "frame-ancestors 'none'",
+            'Referrer-Policy': 'no-referrer',
         });
-        createReadStream(file).pipe(res);
+        pipeline(createReadStream(file), res, (error) => {
+            if (error) res.destroy(error);
+        });
         return true;
     };
 }
