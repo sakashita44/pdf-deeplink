@@ -18,6 +18,7 @@ export interface WebdavCredentials {
     password: string;
 }
 
+// fs.realpath の JavaScript 実装は Windows の 8.3 形式の短い名前や大文字小文字を正規化しないため、OS の API を呼ぶ native 版を用いる。
 const realpathNative = promisify(realpath.native);
 const MAX_REDIRECTS = 5;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
@@ -32,6 +33,7 @@ export function bodyOf(response: IncomingMessage): FileBody {
 }
 
 export function discard(response: IncomingMessage, label: string): never {
+    // Node.js の IncomingMessage は本文を読み切らないとソケットが解放されないため、例外を投げる前に読み捨てる。
     response.resume();
     throw new UpstreamError(
         response.statusCode ?? 502,
@@ -48,6 +50,7 @@ export function resolveRoots(dirs: string[]): string[] {
     });
 }
 
+// Windows の realpath.native は長いパスなどで拡張プレフィックス \\?\ を付けて返す場合があるため、ドライブ文字付きのパスから取り除く。
 function canonical(value: string): string {
     return /^\\\\\?\\[A-Za-z]:\\/.test(value) ? value.slice(4) : value;
 }
@@ -58,6 +61,7 @@ function isInside(root: string, target: string): boolean {
         relative !== '' &&
         relative !== '..' &&
         !relative.startsWith(`..${path.sep}`) &&
+        // Windows で root と target が異なるドライブにある場合、path.relative は ".." で始まらない絶対パスを返す。
         !path.isAbsolute(relative)
     );
 }
@@ -82,7 +86,9 @@ function localPathOf(location: string): string | null {
     } catch {
         return null;
     }
+    // fileURLToPath は Windows で file://localhost/... を UNC パス（\\...）へ、POSIX で file:////... を "//" で始まるパスへ変換する。
     if (filePath.startsWith('\\\\') || filePath.startsWith('//')) return null;
+    // NTFS はドライブ文字より後ろの ":" を代替データストリームの区切りとして解釈し、fileURLToPath もこれを拒否しない。
     if (process.platform === 'win32' && filePath.slice(2).includes(':'))
         return null;
     return filePath;
@@ -113,6 +119,7 @@ export async function openLocalFile(
             403,
             `${key}: the file is outside the allowed directories`,
         );
+    // Windows の fs.constants には O_NOFOLLOW がない。O_NOFOLLOW は realpath の後でのシンボリックリンクへの差し替えを防ぎ、O_NONBLOCK は FIFO を開いたときに書き込み側を待って止まるのを防ぐ。
     const flags =
         constants.O_NOFOLLOW === undefined
             ? constants.O_RDONLY
@@ -163,6 +170,7 @@ export async function followRedirects(
                 502,
                 'file request redirected to a non-HTTPS location',
             );
+        // Zotero Web API の /file は署名付きの URL へ転送するため、転送先には Zotero-API-Key を送らない。
         response = await get(endpointOf(url), url.pathname + url.search, {
             headers: {},
             timeoutMs,
@@ -175,6 +183,7 @@ export async function followRedirects(
 function webdavArchiveUrl(base: URL, key: string): URL {
     const directory = new URL(base);
     if (!directory.pathname.endsWith('/')) directory.pathname += '/';
+    // Zotero の WebDAV 同期は、設定画面に入れた URL の下の zotero/<キー>.zip に添付を置く。
     return new URL(`zotero/${key}.zip`, directory);
 }
 
@@ -222,6 +231,7 @@ export async function fetchWebdavFile(
 }
 
 function entryName(entry: ZipEntry): string {
+    // Zotero は zip の中のファイル名が %ZB64 で終わる場合、それを除いた部分を UTF-8 の Base64 として解読する。
     return entry.name.endsWith('%ZB64')
         ? Buffer.from(entry.name.slice(0, -'%ZB64'.length), 'base64').toString(
               'utf8',
@@ -235,11 +245,13 @@ function pickEntry(
 ): ZipEntry | null {
     const files = entries
         .map((entry) => ({ entry, name: entryName(entry) }))
+        // Zotero も展開するときに .zotero で始まるエントリ（全文検索の索引など）を読み飛ばす。
         .filter(
             ({ name }) => !name.endsWith('/') && !name.startsWith('.zotero'),
         );
     const matches = files.filter(({ name }) => name === filename);
     if (matches.length === 1) return matches[0]!.entry;
+    // Zotero も、zip の中のファイルが 1 つだけなら、添付のファイル名と一致しなくてもそのファイルを使う。
     if (matches.length === 0 && files.length === 1) return files[0]!.entry;
     return null;
 }

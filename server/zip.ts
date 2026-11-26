@@ -42,6 +42,7 @@ export function listEntries(archive: Buffer): ZipEntry[] {
             archive.readUInt16LE(p + 32);
         if (next > end) throw new ZipError('the central directory is broken');
         entries.push({
+            // ZIP の仕様では汎用ビットフラグの bit 11 が立っていればファイル名は UTF-8 である。立っていなければ本来は CP437 だが、Buffer は CP437 を扱えないため、バイト値を保つ latin1 で読む。
             name: archive.toString(
                 flags & 0x800 ? 'utf8' : 'latin1',
                 p + 46,
@@ -60,6 +61,7 @@ export function listEntries(archive: Buffer): ZipEntry[] {
 }
 
 function findEndOfCentralDirectory(archive: Buffer): number {
+    // EOCD の後ろには最大 65,535 バイトのコメントが続き、コメントの中に同じシグネチャが現れうるため、末尾から探してコメント長と末尾の位置が合うものを採る。
     const lowest = Math.max(0, archive.length - EOCD_SIZE - MAX_COMMENT);
     for (let p = archive.length - EOCD_SIZE; p >= lowest; p--) {
         if (
@@ -89,6 +91,7 @@ export function readEntry(
     const p = entry.localOffset;
     if (p + 30 > archive.length || archive.readUInt32LE(p) !== LOCAL_SIGNATURE)
         throw new ZipError('the local header is broken');
+    // 拡張フィールドの長さは中央ディレクトリとローカルヘッダで異なりうるため、本体の位置はローカルヘッダの長さから求める。サイズと CRC は、データ記述子を使う場合にローカルヘッダで 0 になるため中央ディレクトリの値を使う。
     const start =
         p + 30 + archive.readUInt16LE(p + 26) + archive.readUInt16LE(p + 28);
     const end = start + entry.compressedSize;
@@ -102,6 +105,7 @@ export function readEntry(
     } else if (entry.method === 8) {
         try {
             content = inflateRawSync(data, {
+                // ZIP の圧縮方式 8 は zlib ヘッダのない Deflate である。maxOutputLength は 0 を受け付けないため、0 バイトのエントリに備えて下限を 1 とする。
                 maxOutputLength: Math.max(1, entry.uncompressedSize),
             });
         } catch {

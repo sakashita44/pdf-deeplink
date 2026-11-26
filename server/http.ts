@@ -35,6 +35,7 @@ export function endpointOf(url: URL): Endpoint {
         throw new Error(`unsupported protocol: ${url.protocol}`);
     return {
         protocol: url.protocol,
+        // URL の hostname は IPv6 アドレスを角括弧付きで返すが、http.request の host は角括弧のない値を求める。
         host: url.hostname.replace(/^\[(.*)\]$/, '$1'),
         port: Number(url.port || (url.protocol === 'https:' ? 443 : 80)),
     };

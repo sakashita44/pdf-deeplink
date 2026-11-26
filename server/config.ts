@@ -159,6 +159,7 @@ function webdavCredentials(
         throw new Error(
             `${PREFIX}WEBDAV_USERNAME and ${PREFIX}WEBDAV_PASSWORD must be set together`,
         );
+    // Basic 認証（RFC 7617）は最初の ":" でユーザー名とパスワードを分けるため、ユーザー名に ":" を含められない。
     if (username.includes(':'))
         throw new Error(`${PREFIX}WEBDAV_USERNAME must not contain ":"`);
     return { username, password };
@@ -178,6 +179,7 @@ function secret(env: NodeJS.ProcessEnv, name: string): string | undefined {
         } catch {
             throw new Error(`cannot read ${PREFIX}${name}_FILE`);
         }
+        // readFileSync は UTF-8 の BOM を残すため取り除く。パスワードの両端の空白は値の一部として残す。
         value = value.replace(/^\u{FEFF}/u, '').replace(/\r?\n$/, '');
     } else if (direct !== undefined) {
         value = direct;

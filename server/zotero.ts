@@ -185,7 +185,7 @@ export class ZoteroSource {
             items.push(...body);
             const reported = headers['total-results'];
             total =
-                typeof reported === 'string' && /^d+$/.test(reported)
+                typeof reported === 'string' && /^\d+$/.test(reported)
                     ? Number(reported)
                     : body.length < PAGE_LIMIT
                       ? start + body.length
@@ -265,6 +265,7 @@ export class ZoteroSource {
                 return bodyOf(response);
             }
             case 'local': {
+                // Zotero の Local API は /file で本体を返さず、実ファイルの file:// URL を Location に入れた 302 を返す。
                 const response = await this.#request(fileApiPath, signal);
                 response.resume();
                 const location = response.headers.location;
@@ -342,6 +343,7 @@ export class ZoteroSource {
     }
 }
 
+// zotero.org にファイルを置いていないライブラリでは、Web API の items/top が links.attachment を返さない。
 function needsAttachmentIndex(item: ZoteroItem): boolean {
     return (
         !isPdf(item) &&
