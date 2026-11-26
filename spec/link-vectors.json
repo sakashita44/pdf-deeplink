@@ -1,7 +1,7 @@
 {
     "parse": [
         {
-            "name": "最小の指定",
+            "name": "必須のパラメータだけを指定する",
             "query": "src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&rects=3:72,140.5,240,18",
             "link": {
                 "src": "zotero:ABCD1234",
@@ -10,7 +10,7 @@
             }
         },
         {
-            "name": "版を明示し、複数の矩形と目印を持つ",
+            "name": "バージョンを明示し、複数の矩形と検索用テキストを指定する",
             "query": "v=1&src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&rects=12:72,140,240,18_72,158,180,18&label=iv&q=%E5%9B%B32",
             "link": {
                 "src": "zotero:ABCD1234",
@@ -29,7 +29,7 @@
             }
         },
         {
-            "name": "複数のページにまたがる",
+            "name": "複数のページにまたがる範囲を指定する",
             "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=3:72,700,240,18_4:72,60,240,40_72,100,120,18",
             "link": {
                 "src": "zotero:ABCD1234",
@@ -47,7 +47,7 @@
             }
         },
         {
-            "name": "SHA-256 の先頭 16 桁",
+            "name": "SHA-256 の先頭 16 桁を受け付ける",
             "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=1:0,0,1,1",
             "link": {
                 "src": "zotero:ABCD1234",
@@ -56,87 +56,87 @@
             }
         },
         {
-            "name": "SHA-256 が 16 桁未満",
+            "name": "16 桁未満の SHA-256 はエラーとする",
             "query": "src=zotero:ABCD1234&sha256=0123456789abcde&rects=1:0,0,1,1",
             "error": "invalid sha256"
         },
         {
-            "name": "未対応の版",
+            "name": "未対応のバージョンはエラーとする",
             "query": "v=2&src=zotero:ABCD1234&sha256=0123456789abcdef&rects=1:0,0,1,1",
             "error": "unsupported version: 2"
         },
         {
-            "name": "取得元の名前空間が不明",
+            "name": "未知の取得元の名前空間はエラーとする",
             "query": "src=paperless:12&sha256=0123456789abcdef&rects=1:0,0,1,1",
             "error": "invalid src"
         },
         {
-            "name": "SHA-256 が大文字",
+            "name": "大文字を含む SHA-256 はエラーとする",
             "query": "src=zotero:ABCD1234&sha256=0123456789ABCDEF&rects=1:0,0,1,1",
             "error": "invalid sha256"
         },
         {
-            "name": "先頭の矩形にページがない",
+            "name": "先頭の矩形にページ番号がない場合はエラーとする",
             "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=0,0,1,1",
             "error": "invalid rects"
         },
         {
-            "name": "ページが 0",
+            "name": "ページ番号 0 はエラーとする",
             "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=0:0,0,1,1",
             "error": "invalid rects"
         },
         {
-            "name": "ページが昇順でない",
+            "name": "昇順でないページ番号はエラーとする",
             "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=4:0,0,1,1_3:0,0,1,1",
             "error": "invalid rects"
         },
         {
-            "name": "ページに矩形がない",
+            "name": "矩形を含まないページはエラーとする",
             "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=3:_4:0,0,1,1",
             "error": "invalid rects"
         },
         {
-            "name": "矩形の幅が 0",
+            "name": "幅が 0 の矩形はエラーとする",
             "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=1:0,0,0,1",
             "error": "invalid rects"
         },
         {
-            "name": "矩形の値が数値でない",
+            "name": "10 進数でない座標値はエラーとする",
             "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=1:0,0,1e3,1",
             "error": "invalid rects"
         },
         {
-            "name": "矩形がない",
+            "name": "rects がない場合はエラーとする",
             "query": "src=zotero:ABCD1234&sha256=0123456789abcdef",
             "error": "invalid rects"
         },
         {
-            "name": "矩形の数がページの合計で上限を超える",
+            "name": "全ページの矩形の合計が上限を超える場合はエラーとする",
             "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=1:0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_2:0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1",
             "error": "invalid rects"
         },
         {
-            "name": "ページが同じ番号を繰り返す",
+            "name": "重複するページ番号はエラーとする",
             "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=3:0,0,1,1_3:0,0,1,1",
             "error": "invalid rects"
         },
         {
-            "name": "ページが上限を超える",
+            "name": "上限を超えるページ番号はエラーとする",
             "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=100001:0,0,1,1",
             "error": "invalid rects"
         },
         {
-            "name": "ページに先頭の 0 がある",
+            "name": "先頭に 0 を含むページ番号はエラーとする",
             "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=03:0,0,1,1",
             "error": "invalid rects"
         },
         {
-            "name": "座標が上限を超える",
+            "name": "上限を超える座標値はエラーとする",
             "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=1:100000.1,0,1,1",
             "error": "invalid rects"
         },
         {
-            "name": "負の座標と負の 0 を受け付け、負の 0 は 0 とする",
+            "name": "負の座標値を受け付け、負の 0 は 0 として解釈する",
             "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=1:-10.5,-0,1,1",
             "link": {
                 "src": "zotero:ABCD1234",
@@ -145,17 +145,17 @@
             }
         },
         {
-            "name": "同じ名前のパラメータが複数ある",
+            "name": "同じ名前のパラメータが複数ある場合はエラーとする",
             "query": "src=zotero:ABCD1234&src=zotero:EFGH5678&sha256=0123456789abcdef&rects=1:0,0,1,1",
             "error": "duplicate parameter: src"
         },
         {
-            "name": "目印が上限を超える",
+            "name": "上限を超える検索用テキストはエラーとする",
             "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=1:0,0,1,1&q=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "error": "q too long"
         },
         {
-            "name": "空の目印とページラベルは省略と同じに扱う",
+            "name": "空の検索用テキストとページラベルは省略として扱う",
             "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=1:0,0,1,1&label=&q=",
             "link": {
                 "src": "zotero:ABCD1234",
@@ -166,7 +166,7 @@
     ],
     "format": [
         {
-            "name": "座標を小数第 1 位に丸め、SHA-256 を先頭 16 桁にし、v=1 は省く",
+            "name": "座標値を小数第 1 位に丸め、SHA-256 を先頭 16 桁に短縮し、v=1 を省略する",
             "link": {
                 "src": "zotero:ABCD1234",
                 "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -178,7 +178,7 @@
             "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=2:72,140.1,240,18&q=%E5%9B%B32"
         },
         {
-            "name": "ページごとに先頭の矩形へページを付ける",
+            "name": "各ページの先頭の矩形にページ番号を付与する",
             "link": {
                 "src": "zotero:ABCD1234",
                 "sha256": "0123456789abcdef",
@@ -197,7 +197,7 @@
             "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=3:72,700,240,18_4:72,60,240,40_72,100,120,18&label=iv"
         },
         {
-            "name": "丸めて 0 になる幅と高さは 0.1 にし、目印とページラベルの記号は符号化する",
+            "name": "丸めると 0 になる幅と高さは 0.1 とし、検索用テキストとページラベルの記号は符号化する",
             "link": {
                 "src": "zotero:ABCD1234",
                 "sha256": "0123456789abcdef",
@@ -210,19 +210,19 @@
     ],
     "sameVersion": [
         {
-            "name": "先頭 16 桁が一致する",
+            "name": "先頭 16 桁が一致する場合は同じバージョンと判定する",
             "link": "0123456789abcdef",
             "pdf": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             "same": true
         },
         {
-            "name": "64 桁すべてが一致する",
+            "name": "64 桁すべてが一致する場合は同じバージョンと判定する",
             "link": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             "pdf": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             "same": true
         },
         {
-            "name": "先頭 16 桁が異なる",
+            "name": "先頭 16 桁が異なる場合は別のバージョンと判定する",
             "link": "fedcba9876543210",
             "pdf": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             "same": false

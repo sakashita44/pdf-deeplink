@@ -296,7 +296,7 @@ function selectionToLink(
     if (!regions.length || !anchor) return null;
     if (regions.flatMap(({ rects }) => rects).length > LIMITS.rects)
         return 'too-large';
-    // PDFFindController はページごとに文字列を照合し、ページをまたいで一致しないため、目印は最初のページの部分から作る。
+    // PDFFindController はページごとに文字列を照合し、ページをまたいで一致しないため、検索用テキストは最初のページの部分から作る。
     const q = [...normalizeQuote(texts[0] ?? '')]
         .slice(0, QUOTE_CHARS)
         .join('');

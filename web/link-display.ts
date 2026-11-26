@@ -151,7 +151,7 @@ function showNotice(
         const query = link.q;
         let searched = false;
         actions.append(
-            button('目印で検索', () => {
+            button('一致する箇所を検索', () => {
                 eventBus.dispatch('find', {
                     source: null,
                     type: searched ? 'again' : '',

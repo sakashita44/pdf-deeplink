@@ -33,7 +33,7 @@ export function renderList(app: HTMLElement): void {
     app.innerHTML = `
         <main class="list">
             <div class="list-controls">
-                <h1>PDF 箇所リンク</h1>
+                <h1>pdf-deeplink</h1>
                 <form class="search" role="search">
                     <input type="search" name="q" placeholder="タイトル・著者・年で検索" aria-label="検索語" />
                     <button type="submit">検索</button>

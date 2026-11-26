@@ -41,7 +41,7 @@ export async function renderViewer(
             <div class="viewer-stage"><div class="viewer-container"><div class="pdfViewer"></div></div></div>
             <div class="popup" role="dialog" aria-label="リンクの作成" hidden>
                 <p class="popup-summary"></p>
-                <label>目印 <input type="text" name="q" maxlength="200" placeholder="引用、図表番号、メモ" /></label>
+                <label>検索用テキスト <input type="text" name="q" maxlength="200" placeholder="引用、図表のタイトルなど" /></label>
                 <div class="popup-actions">
                     <button type="button" data-action="copy-link">リンクをコピー</button>
                     <button type="button" data-action="copy-citation">出典をコピー</button>
@@ -102,7 +102,7 @@ export async function renderViewer(
               .filter(Boolean)
               .join(' — ')
         : src;
-    document.title = meta?.title || 'PDF 箇所リンク';
+    document.title = meta?.title || 'pdf-deeplink';
 
     const data = new Uint8Array(await fileResponse.arrayBuffer());
     // getDocument() は data のバッファを Worker へ移譲し、メインスレッドからは読めなくなるため、先に SHA-256 を計算する。

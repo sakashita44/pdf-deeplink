@@ -16,16 +16,16 @@ const two = [
 const labels = ['i', 'ii', '1', '2'];
 const labelOf = (page: number) => labels[page - 1];
 
-test('pagesText: ページラベルがあればそれを使う', () => {
+test('pagesText: ページラベルが存在する場合はページラベルを使用する', () => {
     assert.equal(pagesText({ regions: two, label: '1–2' }), 'p.1–2');
 });
 
-test('pagesText: ページラベルがなければページ番号の範囲にする', () => {
+test('pagesText: ページラベルが存在しない場合はページ番号の範囲で表す', () => {
     assert.equal(pagesText({ regions: one }), 'p.3');
     assert.equal(pagesText({ regions: two }), 'p.3–4');
 });
 
-test('pagesText: 連続しないページは連続する部分ごとにまとめて並べる', () => {
+test('pagesText: 連続しないページは、連続する部分ごとに範囲として列挙する', () => {
     const page = (n: number) => ({ page: n, rects: [[0, 0, 1, 1] as const] });
     assert.equal(
         pagesText({ regions: [page(3), page(4), page(10)] }),
@@ -34,12 +34,12 @@ test('pagesText: 連続しないページは連続する部分ごとにまとめ
     assert.equal(pagesText({ regions: [page(3), page(10)] }), 'p.3, 10');
 });
 
-test('labelRange: 最初と最後のページのラベルを結ぶ', () => {
+test('labelRange: 最初のページと最後のページのページラベルを範囲として結合する', () => {
     assert.equal(labelRange(one, labelOf), '1');
     assert.equal(labelRange(two, labelOf), '1–2');
 });
 
-test('labelRange: どちらかのページにラベルがなければ返さない', () => {
+test('labelRange: いずれかのページにページラベルが存在しない場合は未定義とする', () => {
     assert.equal(
         labelRange([...two, { page: 5, rects: [[0, 0, 1, 1]] }], labelOf),
         undefined,
@@ -50,14 +50,14 @@ test('labelRange: どちらかのページにラベルがなければ返さな�
     );
 });
 
-test('linkSituation: 最後のページが PDF のページ数を超えると missing', () => {
+test('linkSituation: 最後のページが PDF のページ数を超える場合は missing と判定する', () => {
     assert.equal(
         linkSituation({ regions: two, sha256: 'ab' }, 3, 'abcd'),
         'missing',
     );
 });
 
-test('linkSituation: SHA-256 の先頭が一致すれば same、しなければ updated', () => {
+test('linkSituation: SHA-256 の先頭が一致する場合は same、一致しない場合は updated と判定する', () => {
     assert.equal(
         linkSituation({ regions: two, sha256: 'ab' }, 4, 'abcd'),
         'same',
@@ -68,27 +68,27 @@ test('linkSituation: SHA-256 の先頭が一致すれば same、しなければ 
     );
 });
 
-test('notice: 更新された PDF では移動でき、目印があれば検索できる', () => {
+test('notice: 更新された PDF では作成時のページへの移動を、検索用テキストが存在する場合は一致する箇所の検索を提示する', () => {
     assert.deepEqual(notice({ regions: two, q: '図2' }, 'updated'), {
         message:
-            'この PDF はリンクの作成後に更新されています。強調表示の位置がずれている場合は、「目印で検索」で該当箇所を探してください。',
-        detail: '作成時の箇所: p.3–4「図2」',
+            'この PDF はリンクの作成後に更新されています。強調表示の位置がずれている場合は、「一致する箇所を検索」を押すと、検索用テキストと一致する箇所へ移動できます。',
+        detail: '作成時の指定位置: p.3–4「図2」',
         canJump: true,
         canSearch: true,
     });
 });
 
-test('notice: ページがない PDF では移動できず、目印がなければ作成者への確認を促す', () => {
+test('notice: ページが存在しない PDF では移動を提示せず、検索用テキストが存在しない場合は作成者への確認を案内する', () => {
     assert.deepEqual(notice({ regions: one }, 'missing'), {
         message:
             'リンクが指すページがこの PDF にありません。PDF が差し替えられた可能性があります。リンクの作成者に、指している箇所を確認してください。',
-        detail: '作成時の箇所: p.3',
+        detail: '作成時の指定位置: p.3',
         canJump: false,
         canSearch: false,
     });
 });
 
-test('citation: 値がある項目だけをつなぐ', () => {
+test('citation: 値が存在する項目のみを連結する', () => {
     assert.equal(
         citation(
             {

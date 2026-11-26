@@ -65,7 +65,8 @@ export function notice(
     target: { regions: PageRects[]; label?: string; q?: string },
     situation: Exclude<LinkSituation, 'same'>,
 ): Notice {
-    const search = '「目印で検索」で該当箇所を探してください。';
+    const search =
+        '「一致する箇所を検索」を押すと、検索用テキストと一致する箇所へ移動できます。';
     const message =
         situation === 'missing'
             ? `リンクが指すページがこの PDF にありません。PDF が差し替えられた可能性があります。${
@@ -80,7 +81,7 @@ export function notice(
               }`;
     return {
         message,
-        detail: `作成時の箇所: ${pagesText(target)}${target.q ? `「${target.q}」` : ''}`,
+        detail: `作成時の指定位置: ${pagesText(target)}${target.q ? `「${target.q}」` : ''}`,
         canJump: situation === 'updated',
         canSearch: Boolean(target.q),
     };
