@@ -1,10 +1,17 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { loadConfig, parseDirs, secret } from './config.ts';
+import { loadConfig } from './config.ts';
 
 const P = 'PDF_DEEPLINK_ZOTERO_';
 const absolute = path.resolve('/zotero/storage');
+const other = path.resolve('/zotero/linked');
+const webdav = {
+    [`${P}FILE_SOURCE`]: 'webdav',
+    [`${P}WEBDAV_URL`]: 'https://dav.example/dav',
+};
 
 test('loadConfig: FILE_SOURCE がなく FILE_PATH があれば、従来どおりテンプレートで取得する', () => {
     const config = loadConfig({ [`${P}FILE_PATH`]: '/files/{key}' });
@@ -15,7 +22,7 @@ test('loadConfig: FILE_SOURCE がなく FILE_PATH があれば、従来どおり
     assert.equal(config.zotero.apiKey, undefined);
 });
 
-test('loadConfig: 取得方法を決められない設定と、取得方法に合わない変数は起動時に拒否する', () => {
+test('loadConfig: 取得方法を決められない設定、取得方法に合わない変数、不完全な設定は起動時に拒否する', () => {
     const cases: NodeJS.ProcessEnv[] = [
         {},
         { [`${P}FILE_SOURCE`]: 'path' },
@@ -28,7 +35,21 @@ test('loadConfig: 取得方法を決められない設定と、取得方法に�
         },
         { [`${P}FILE_SOURCE`]: 'web', [`${P}WEBDAV_URL`]: 'https://dav' },
         { [`${P}FILE_SOURCE`]: 'local' },
+        { [`${P}FILE_SOURCE`]: 'local', [`${P}LOCAL_DIRS`]: 'relative/dir' },
+        {
+            [`${P}FILE_SOURCE`]: 'local',
+            [`${P}LOCAL_DIRS`]: `${absolute}${path.delimiter}`,
+        },
         { [`${P}FILE_SOURCE`]: 'webdav' },
+        { ...webdav, [`${P}WEBDAV_URL`]: 'ftp://dav.example/' },
+        { ...webdav, [`${P}WEBDAV_URL`]: 'https://dav.example/?a=1' },
+        { ...webdav, [`${P}WEBDAV_USERNAME`]: 'zotero' },
+        { ...webdav, [`${P}WEBDAV_PASSWORD`]: 'pass' },
+        {
+            ...webdav,
+            [`${P}WEBDAV_USERNAME`]: 'a:b',
+            [`${P}WEBDAV_PASSWORD`]: 'pass',
+        },
     ];
     for (const env of cases)
         assert.throws(() => loadConfig(env), Error, JSON.stringify(env));
@@ -38,19 +59,18 @@ test('loadConfig: 取得方法ごとの設定を読む', () => {
     assert.deepEqual(
         loadConfig({
             [`${P}FILE_SOURCE`]: 'local',
-            [`${P}LOCAL_DIRS`]: absolute,
+            [`${P}LOCAL_DIRS`]: `${absolute}${path.delimiter}${other}`,
         }).zotero.file,
-        { kind: 'local', dirs: [absolute] },
+        { kind: 'local', dirs: [absolute, other] },
     );
-    const webdav = loadConfig({
-        [`${P}FILE_SOURCE`]: 'webdav',
-        [`${P}WEBDAV_URL`]: 'https://dav.example/dav',
+    const dav = loadConfig({
+        ...webdav,
         [`${P}WEBDAV_USERNAME`]: 'zotero',
         [`${P}WEBDAV_PASSWORD`]: ' pass ',
     }).zotero.file;
-    assert.equal(webdav.kind, 'webdav');
-    if (webdav.kind === 'webdav')
-        assert.deepEqual(webdav.credentials, {
+    assert.equal(dav.kind, 'webdav');
+    if (dav.kind === 'webdav')
+        assert.deepEqual(dav.credentials, {
             username: 'zotero',
             password: ' pass ',
         });
@@ -59,6 +79,7 @@ test('loadConfig: 取得方法ごとの設定を読む', () => {
         [`${P}ENDPOINT`]: 'https://api.zotero.org',
         [`${P}API_KEY`]: 'k',
     }).zotero;
+    assert.deepEqual(web.file, { kind: 'web' });
     assert.deepEqual(web.endpoint, {
         protocol: 'https:',
         host: 'api.zotero.org',
@@ -71,60 +92,45 @@ test('loadConfig: 資格情報を含む WebDAV の URL は、値をエラーに�
     assert.throws(
         () =>
             loadConfig({
-                [`${P}FILE_SOURCE`]: 'webdav',
+                ...webdav,
                 [`${P}WEBDAV_URL`]: 'https://user:hunter2@dav.example/',
             }),
         (error: Error) => !error.message.includes('hunter2'),
     );
-    assert.throws(() =>
-        loadConfig({
-            [`${P}FILE_SOURCE`]: 'webdav',
-            [`${P}WEBDAV_URL`]: 'https://dav.example/',
-            [`${P}WEBDAV_USERNAME`]: 'zotero',
-        }),
-    );
 });
 
-test('secret: 環境変数かファイルのどちらか一方から読み、ファイルは末尾の改行だけを除く', () => {
-    const files: Record<string, string> = {
-        crlf: '﻿ key \r\n',
-        twoLines: 'a\nb\n',
-        empty: '\n',
+test('loadConfig: 資格情報は環境変数かファイルのどちらか一方から読み、ファイルは末尾の改行だけを除く', (t) => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'pdf-deeplink-'));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
+    const file = (name: string, content: string) => {
+        const filePath = path.join(dir, name);
+        writeFileSync(filePath, content);
+        return filePath;
     };
-    const read = (file: string) => files[file]!;
+    const template = { [`${P}FILE_PATH`]: '/files/{key}' };
+    const keyFile = file('key', '﻿ key \r\n');
     assert.equal(
-        secret({ [`${P}API_KEY_FILE`]: 'crlf' }, 'API_KEY', read),
+        loadConfig({ ...template, [`${P}API_KEY_FILE`]: keyFile }).zotero
+            .apiKey,
         ' key ',
     );
-    assert.equal(secret({ [`${P}API_KEY`]: 'k' }, 'API_KEY', read), 'k');
-    assert.equal(secret({}, 'API_KEY', read), undefined);
+    const dav = loadConfig({
+        ...webdav,
+        [`${P}WEBDAV_USERNAME`]: 'zotero',
+        [`${P}WEBDAV_PASSWORD_FILE`]: file('password', 'secret\n'),
+    }).zotero.file;
+    assert.ok(dav.kind === 'webdav' && dav.credentials?.password === 'secret');
+
     for (const env of [
-        { [`${P}API_KEY`]: 'k', [`${P}API_KEY_FILE`]: 'crlf' },
-        { [`${P}API_KEY_FILE`]: 'twoLines' },
-        { [`${P}API_KEY_FILE`]: 'empty' },
+        { [`${P}API_KEY`]: 'k', [`${P}API_KEY_FILE`]: keyFile },
+        { [`${P}API_KEY_FILE`]: file('lines', 'a\nb\n') },
+        { [`${P}API_KEY_FILE`]: file('empty', '\n') },
+        { [`${P}API_KEY_FILE`]: path.join(dir, 'missing') },
         { [`${P}API_KEY`]: '' },
     ])
         assert.throws(
-            () => secret(env, 'API_KEY', read),
+            () => loadConfig({ ...template, ...env }),
             Error,
             JSON.stringify(env),
         );
-    assert.throws(
-        () =>
-            secret({ [`${P}API_KEY_FILE`]: 'missing' }, 'API_KEY', () => {
-                throw new Error('ENOENT');
-            }),
-        /cannot read/,
-    );
-});
-
-test('parseDirs: パス区切りで分け、空の要素と相対パスを拒否する', () => {
-    const other = path.resolve('/other');
-    assert.deepEqual(parseDirs(`${absolute}${path.delimiter}${other}`), [
-        absolute,
-        other,
-    ]);
-    assert.throws(() => parseDirs(`${absolute}${path.delimiter}`));
-    assert.throws(() => parseDirs('relative/dir'));
-    assert.throws(() => parseDirs(undefined));
 });

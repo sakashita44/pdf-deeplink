@@ -116,7 +116,7 @@ function fileSourceKind(env: NodeJS.ProcessEnv): FileSource['kind'] {
     return value as FileSource['kind'];
 }
 
-export function parseDirs(value: string | undefined): string[] {
+function parseDirs(value: string | undefined): string[] {
     if (!value) throw new Error(`${PREFIX}LOCAL_DIRS is required`);
     const dirs = value.split(path.delimiter);
     for (const dir of dirs) {
@@ -164,11 +164,7 @@ function webdavCredentials(
     return { username, password };
 }
 
-export function secret(
-    env: NodeJS.ProcessEnv,
-    name: string,
-    read: (file: string) => string = (file) => readFileSync(file, 'utf8'),
-): string | undefined {
+function secret(env: NodeJS.ProcessEnv, name: string): string | undefined {
     const direct = env[PREFIX + name];
     const file = env[`${PREFIX}${name}_FILE`];
     if (direct !== undefined && file !== undefined)
@@ -178,7 +174,7 @@ export function secret(
     let value: string;
     if (file !== undefined) {
         try {
-            value = read(file);
+            value = readFileSync(file, 'utf8');
         } catch {
             throw new Error(`cannot read ${PREFIX}${name}_FILE`);
         }

@@ -21,7 +21,7 @@ export interface WebdavCredentials {
 const realpathNative = promisify(realpath.native);
 const MAX_REDIRECTS = 5;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
-export const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024;
+const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024;
 
 export function bodyOf(response: IncomingMessage): FileBody {
     const length = Number(response.headers['content-length']);
@@ -52,7 +52,7 @@ function canonical(value: string): string {
     return /^\\\\\?\\[A-Za-z]:\\/.test(value) ? value.slice(4) : value;
 }
 
-export function isInside(root: string, target: string): boolean {
+function isInside(root: string, target: string): boolean {
     const relative = path.relative(root, target);
     return (
         relative !== '' &&
@@ -62,7 +62,7 @@ export function isInside(root: string, target: string): boolean {
     );
 }
 
-export function localPathOf(location: string): string | null {
+function localPathOf(location: string): string | null {
     let url: URL;
     try {
         url = new URL(location);
@@ -172,7 +172,7 @@ export async function followRedirects(
     }
 }
 
-export function webdavArchiveUrl(base: URL, key: string): URL {
+function webdavArchiveUrl(base: URL, key: string): URL {
     const directory = new URL(base);
     if (!directory.pathname.endsWith('/')) directory.pathname += '/';
     return new URL(`zotero/${key}.zip`, directory);
@@ -221,7 +221,7 @@ export async function fetchWebdavFile(
     }
 }
 
-export function entryName(entry: ZipEntry): string {
+function entryName(entry: ZipEntry): string {
     return entry.name.endsWith('%ZB64')
         ? Buffer.from(entry.name.slice(0, -'%ZB64'.length), 'base64').toString(
               'utf8',
@@ -229,7 +229,7 @@ export function entryName(entry: ZipEntry): string {
         : entry.name;
 }
 
-export function pickEntry(
+function pickEntry(
     entries: ZipEntry[],
     filename: string | undefined,
 ): ZipEntry | null {
