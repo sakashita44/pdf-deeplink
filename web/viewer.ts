@@ -393,10 +393,22 @@ export async function renderViewer(
     function handleTextSelection(): void {
         const current = document.getSelection();
         if (!current || current.isCollapsed || current.rangeCount === 0) return;
+        const range = current.getRangeAt(0);
+        // PDF.js は描画したページを一定数だけ保持し、古いページのテキストレイヤーを破棄する。長い選択の途中で端のページが破棄されると、選択の端はテキストレイヤーの外へ移り、そのページの文字が選択から抜け落ちる。
+        if (
+            !inTextLayer(range.startContainer) ||
+            !inTextLayer(range.endContainer)
+        ) {
+            toast(
+                ui.toast,
+                '選択した範囲が大きすぎます。範囲を狭めてください。',
+            );
+            return;
+        }
         const regions: PageRects[] = [];
         const texts: string[] = [];
         let anchor: DOMRect | undefined;
-        for (const selected of selectedPages(current.getRangeAt(0))) {
+        for (const selected of selectedPages(range)) {
             const info = pageInfo(selected.page);
             if (!info) continue;
             const { page, view, geometry: pageGeometry, origin } = info;
@@ -659,6 +671,11 @@ async function digest(data: Uint8Array<ArrayBuffer>): Promise<string> {
     return [...new Uint8Array(hash)]
         .map((byte) => byte.toString(16).padStart(2, '0'))
         .join('');
+}
+
+function inTextLayer(node: Node): boolean {
+    const element = node instanceof Element ? node : node.parentElement;
+    return !!element?.closest('.textLayer');
 }
 
 interface SelectedPart {
