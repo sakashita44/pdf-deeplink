@@ -22,6 +22,12 @@ const cases: [name: string, text: string, quote: string][] = [
         '深層学習を用いた手法',
     ],
     ['空白をまとめて前後を除く', '  a \n\n b  ', 'a b'],
+    [
+        '結合文字の直後の行末のハイフンを除く',
+        'cafe\u0301-\nteria',
+        'cafe\u0301teria',
+    ],
+    ['結合用の濁点の直後の改行を除く', 'か\u3099\nき', 'か\u3099き'],
 ];
 
 for (const [name, text, quote] of cases) {

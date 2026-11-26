@@ -33,6 +33,7 @@ interface Selection {
     regions: PageRects[];
     q: string;
     anchor: DOMRect;
+    source?: Range;
 }
 
 export interface LinkCreationContext {
@@ -93,15 +94,38 @@ export function setupLinkCreation(context: LinkCreationContext): void {
         };
     }
 
-    function handleTextSelection(): void {
+    function bodySelection(): Range | null {
         const current = document.getSelection();
-        if (!current || current.isCollapsed || current.rangeCount === 0) return;
-        const result = selectionToLink(current.getRangeAt(0), pages);
+        if (!current || current.isCollapsed || current.rangeCount === 0)
+            return null;
+        const range = current.getRangeAt(0);
+        return container.contains(range.commonAncestorContainer) ? range : null;
+    }
+
+    function handleTextSelection(): void {
+        const range = bodySelection();
+        if (!range) return;
+        const result = selectionToLink(range, pages);
         if (result === 'too-large') {
+            closePopup();
             toast(context.toast, TOO_LARGE);
             return;
         }
-        if (result) openPopup(result);
+        if (!result) {
+            closePopup();
+            return;
+        }
+        openPopup({ ...result, source: range.cloneRange() });
+    }
+
+    function selectionChanged(): boolean {
+        const source = selection?.source;
+        const range = bodySelection();
+        if (!source || !range) return false;
+        return (
+            range.compareBoundaryPoints(Range.START_TO_START, source) !== 0 ||
+            range.compareBoundaryPoints(Range.END_TO_END, source) !== 0
+        );
     }
 
     // ポップアップ内の mousedown で本文の選択が解除されると、selectionchange でポップアップが閉じ、選択した範囲も失われる。
@@ -113,8 +137,15 @@ export function setupLinkCreation(context: LinkCreationContext): void {
         const action = (event.target as HTMLElement).closest<HTMLElement>(
             '[data-action]',
         )?.dataset.action;
+        if (action === 'close') {
+            closePopup();
+            return;
+        }
+        if (selectionChanged()) {
+            handleTextSelection();
+            return;
+        }
         const target = currentLink();
-        if (action === 'close') closePopup();
         if (!target) return;
         if (action === 'copy-link') {
             void copy(
@@ -134,6 +165,14 @@ export function setupLinkCreation(context: LinkCreationContext): void {
     container.addEventListener('pointerup', () => {
         // pointerup の時点では、ブラウザが選択範囲をまだ確定していないことがあるため、次のタスクで読む。
         if (mode === 'text') window.setTimeout(handleTextSelection, 0);
+    });
+    document.addEventListener('keyup', (event) => {
+        if (
+            mode === 'text' &&
+            event.shiftKey &&
+            !popup.contains(event.target as Node)
+        )
+            window.setTimeout(handleTextSelection, 0);
     });
     document.addEventListener('selectionchange', () => {
         if (
@@ -281,16 +320,39 @@ function toRect(
 
 // PDF.js のテキストレイヤーは空白だけの要素を含み、getClientRects() が幅のない矩形を返すことがある。また CropBox の外にある文字も要素として置き、CSS で隠しているため、ページの表示領域と重ならない矩形も除く。
 function visibleParts(parts: SelectedPart[], origin: DOMRect): SelectedPart[] {
-    const visible = (rect: DOMRect) =>
-        rect.width > 0.5 &&
-        rect.height > 0.5 &&
-        rect.right > origin.left &&
-        rect.left < origin.right &&
-        rect.bottom > origin.top &&
-        rect.top < origin.bottom;
+    const sized = (rect: DOMRect) => rect.width > 0.5 && rect.height > 0.5;
+    const inside = (rect: DOMRect) =>
+        rect.left >= origin.left - 1 &&
+        rect.right <= origin.right + 1 &&
+        rect.top >= origin.top - 1 &&
+        rect.bottom <= origin.bottom + 1;
     return parts
-        .map(({ rects, text }) => ({ text, rects: rects.filter(visible) }))
+        .map((part) => {
+            const rects = part.rects.filter(sized);
+            if (!part.range || rects.every(inside)) return { ...part, rects };
+            return visibleCharacters(part.range, inside);
+        })
         .filter(({ rects, text }) => text === '\n' || rects.length);
+}
+
+// 表示領域の境界をまたぐテキストノードは、1 文字ずつ位置を調べ、表示領域に収まる文字だけを残す。
+function visibleCharacters(
+    range: Range,
+    inside: (rect: DOMRect) => boolean,
+): SelectedPart {
+    const node = range.startContainer;
+    const rects: DOMRect[] = [];
+    let text = '';
+    const character = document.createRange();
+    for (let offset = range.startOffset; offset < range.endOffset; offset++) {
+        character.setStart(node, offset);
+        character.setEnd(node, offset + 1);
+        const rect = character.getBoundingClientRect();
+        if (rect.width > 0.5 && rect.height > 0.5 && !inside(rect)) continue;
+        text += character.toString();
+        if (rect.width > 0.5 && rect.height > 0.5) rects.push(rect);
+    }
+    return { rects, text };
 }
 
 function inTextLayer(node: Node): boolean {
@@ -301,6 +363,7 @@ function inTextLayer(node: Node): boolean {
 interface SelectedPart {
     rects: DOMRect[];
     text: string;
+    range?: Range;
 }
 
 interface SelectedPage {
@@ -339,6 +402,7 @@ function selectedPages(range: Range): SelectedPage[] {
             selected.parts.push({
                 rects: [...part.getClientRects()],
                 text: part.toString(),
+                range: part,
             });
         }
     }
