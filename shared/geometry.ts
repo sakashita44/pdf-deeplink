@@ -98,6 +98,34 @@ export function mergeLineRects(rects: Rect[]): Rect[] {
         .filter(([, , w, h]) => w > 0 && h > 0);
 }
 
+export function mergeSelectionRects(rects: Rect[]): Rect[] {
+    const columns: Rect[][] = [];
+    for (const line of mergeLineRects(rects)) {
+        const column = columns.find((candidate) =>
+            sameColumn(candidate.at(-1)!, line),
+        );
+        if (column) column.push(line);
+        else columns.push([line]);
+    }
+    return columns.flatMap((lines) =>
+        lines.length <= 2
+            ? lines
+            : [lines[0]!, lines.slice(1, -1).reduce(union), lines.at(-1)!],
+    );
+}
+
+function sameColumn(above: Rect, below: Rect): boolean {
+    const overlap =
+        Math.min(above[0] + above[2], below[0] + below[2]) -
+        Math.max(above[0], below[0]);
+    const gap = below[1] - (above[1] + above[3]);
+    return (
+        overlap >= Math.min(above[2], below[2]) * 0.5 &&
+        gap >= -Math.min(above[3], below[3]) * 0.5 &&
+        gap <= Math.max(above[3], below[3])
+    );
+}
+
 function union(a: Rect, b: Rect): Rect {
     const left = Math.min(a[0], b[0]);
     const top = Math.min(a[1], b[1]);

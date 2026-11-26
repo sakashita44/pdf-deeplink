@@ -2,77 +2,117 @@
     "parse": [
         {
             "name": "最小の指定",
-            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&page=3&rects=72,140.5,240,18",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&rects=3:72,140.5,240,18",
             "link": {
                 "src": "zotero:ABCD1234",
                 "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-                "page": 3,
-                "rects": [[72, 140.5, 240, 18]]
+                "regions": [{ "page": 3, "rects": [[72, 140.5, 240, 18]] }]
             }
         },
         {
             "name": "版を明示し、複数の矩形と目印を持つ",
-            "query": "v=1&src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&page=12&rects=72,140,240,18;72,158,180,18&label=iv&q=%E5%9B%B32",
+            "query": "v=1&src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&rects=12:72,140,240,18;72,158,180,18&label=iv&q=%E5%9B%B32",
             "link": {
                 "src": "zotero:ABCD1234",
                 "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-                "page": 12,
-                "rects": [
-                    [72, 140, 240, 18],
-                    [72, 158, 180, 18]
+                "regions": [
+                    {
+                        "page": 12,
+                        "rects": [
+                            [72, 140, 240, 18],
+                            [72, 158, 180, 18]
+                        ]
+                    }
                 ],
                 "label": "iv",
                 "q": "図2"
             }
         },
         {
-            "name": "SHA-256 の先頭 16 桁",
-            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&page=1&rects=0,0,1,1",
+            "name": "複数のページにまたがる",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=3:72,700,240,18;4:72,60,240,40;72,100,120,18",
             "link": {
                 "src": "zotero:ABCD1234",
                 "sha256": "0123456789abcdef",
-                "page": 1,
-                "rects": [[0, 0, 1, 1]]
+                "regions": [
+                    { "page": 3, "rects": [[72, 700, 240, 18]] },
+                    {
+                        "page": 4,
+                        "rects": [
+                            [72, 60, 240, 40],
+                            [72, 100, 120, 18]
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "name": "SHA-256 の先頭 16 桁",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=1:0,0,1,1",
+            "link": {
+                "src": "zotero:ABCD1234",
+                "sha256": "0123456789abcdef",
+                "regions": [{ "page": 1, "rects": [[0, 0, 1, 1]] }]
             }
         },
         {
             "name": "SHA-256 が 16 桁未満",
-            "query": "src=zotero:ABCD1234&sha256=0123456789abcde&page=1&rects=0,0,1,1",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcde&rects=1:0,0,1,1",
             "error": "invalid sha256"
         },
         {
             "name": "未対応の版",
-            "query": "v=2&src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&page=1&rects=0,0,1,1",
+            "query": "v=2&src=zotero:ABCD1234&sha256=0123456789abcdef&rects=1:0,0,1,1",
             "error": "unsupported version: 2"
         },
         {
             "name": "取得元の名前空間が不明",
-            "query": "src=paperless:12&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&page=1&rects=0,0,1,1",
+            "query": "src=paperless:12&sha256=0123456789abcdef&rects=1:0,0,1,1",
             "error": "invalid src"
         },
         {
             "name": "SHA-256 が大文字",
-            "query": "src=zotero:ABCD1234&sha256=0123456789ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef&page=1&rects=0,0,1,1",
+            "query": "src=zotero:ABCD1234&sha256=0123456789ABCDEF&rects=1:0,0,1,1",
             "error": "invalid sha256"
         },
         {
+            "name": "先頭の矩形にページがない",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=0,0,1,1",
+            "error": "invalid rects"
+        },
+        {
             "name": "ページが 0",
-            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&page=0&rects=0,0,1,1",
-            "error": "invalid page"
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=0:0,0,1,1",
+            "error": "invalid rects"
+        },
+        {
+            "name": "ページが昇順でない",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=4:0,0,1,1;3:0,0,1,1",
+            "error": "invalid rects"
+        },
+        {
+            "name": "ページに矩形がない",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=3:;4:0,0,1,1",
+            "error": "invalid rects"
         },
         {
             "name": "矩形の幅が 0",
-            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&page=1&rects=0,0,0,1",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=1:0,0,0,1",
             "error": "invalid rects"
         },
         {
             "name": "矩形の値が数値でない",
-            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&page=1&rects=0,0,1e3,1",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=1:0,0,1e3,1",
             "error": "invalid rects"
         },
         {
             "name": "矩形がない",
-            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&page=1",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef",
+            "error": "invalid rects"
+        },
+        {
+            "name": "矩形の数がページの合計で上限を超える",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=1:0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;2:0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1",
             "error": "invalid rects"
         }
     ],
@@ -82,11 +122,31 @@
             "link": {
                 "src": "zotero:ABCD1234",
                 "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-                "page": 2,
-                "rects": [[72.04, 140.06, 239.95, 18]],
+                "regions": [
+                    { "page": 2, "rects": [[72.04, 140.06, 239.95, 18]] }
+                ],
                 "q": "図2"
             },
-            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&page=2&rects=72,140.1,240,18&q=%E5%9B%B32"
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=2:72,140.1,240,18&q=%E5%9B%B32"
+        },
+        {
+            "name": "ページごとに先頭の矩形へページを付ける",
+            "link": {
+                "src": "zotero:ABCD1234",
+                "sha256": "0123456789abcdef",
+                "regions": [
+                    { "page": 3, "rects": [[72, 700, 240, 18]] },
+                    {
+                        "page": 4,
+                        "rects": [
+                            [72, 60, 240, 40],
+                            [72, 100, 120, 18]
+                        ]
+                    }
+                ],
+                "label": "iv"
+            },
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=3:72,700,240,18;4:72,60,240,40;72,100,120,18&label=iv"
         }
     ],
     "sameVersion": [

@@ -11,6 +11,7 @@ import 'pdfjs-dist/web/pdf_viewer.css';
 import {
     displayToUser,
     mergeLineRects,
+    mergeSelectionRects,
     toLinkRect,
     toUserSpace,
     type PageGeometry,
@@ -23,8 +24,8 @@ import {
     LIMITS,
     parseLink,
     sameVersion,
+    type PageRects,
     type PdfLink,
-    type Rect,
 } from '../shared/link.ts';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -43,10 +44,16 @@ interface DocumentMetadata {
 }
 
 interface Selection {
-    page: number;
-    rects: Rect[];
+    regions: PageRects[];
     q: string;
     anchor: DOMRect;
+}
+
+interface PageInfo {
+    page: number;
+    view: PageViewLike;
+    geometry: PageGeometry;
+    origin: DOMRect;
 }
 
 interface PageViewLike {
@@ -179,10 +186,18 @@ export async function renderViewer(
     });
     const labelOf = (page: number) => pageLabels?.[page - 1] || undefined;
 
+    const firstPage = (target: { regions: PageRects[] }) =>
+        target.regions[0]!.page;
+    const lastPage = (target: { regions: PageRects[] }) =>
+        target.regions.at(-1)!.page;
+    const pagesText = (target: { regions: PageRects[]; label?: string }) => {
+        const start = target.label ?? firstPage(target);
+        if (firstPage(target) === lastPage(target)) return `p.${start}`;
+        return `p.${start}–${labelOf(lastPage(target)) ?? lastPage(target)}`;
+    };
+
     let highlight: {
-        page: number;
-        rects: Rect[];
-        geometry: PageGeometry;
+        regions: (PageRects & { geometry: PageGeometry })[];
         shownAt: number | null;
     } | null = null;
     let selection: Selection | null = null;
@@ -192,7 +207,7 @@ export async function renderViewer(
         viewer.currentScaleValue = 'page-width';
         ui.pageLabel.textContent = `p.${labelOf(1) ?? 1} / ${pdf.numPages}`;
         if (!link) return;
-        if (link.page > pdf.numPages) {
+        if (lastPage(link) > pdf.numPages) {
             showNotice(link, 'missing');
             return;
         }
@@ -211,35 +226,40 @@ export async function renderViewer(
 
     // 拡大率の変更などで PDF.js がページを描画し直すと、PDF.js 以外が追加した要素はページから取り除かれるため、描画のたびに強調を貼り直す。
     eventBus.on('pagerendered', (event: { pageNumber: number }) => {
-        if (highlight?.page === event.pageNumber) drawHighlight();
+        const region = highlight?.regions.find(
+            ({ page }) => page === event.pageNumber,
+        );
+        if (region) drawHighlight(region);
     });
 
     async function showHighlight(target: PdfLink): Promise<void> {
-        const pdfPage = await pdf.getPage(target.page);
-        const view = pageView(target.page);
-        // PDF.js は 2 ページ目以降のページ情報を遅れて設定し、それまでは 1 ページ目の寸法で位置を計算する。移動の前に対象ページの情報を設定する。
-        if (view && !view.pdfPage) view.setPdfPage(pdfPage);
-        const pageGeometry = geometry(pdfPage);
-        const [x, y] = target.rects[0]!;
+        const regions = await Promise.all(
+            target.regions.map(async (region) => {
+                const pdfPage = await pdf.getPage(region.page);
+                const view = pageView(region.page);
+                // PDF.js は 2 ページ目以降のページ情報を遅れて設定し、それまでは 1 ページ目の寸法で位置を計算する。移動の前に対象ページの情報を設定する。
+                if (view && !view.pdfPage) view.setPdfPage(pdfPage);
+                return { ...region, geometry: geometry(pdfPage) };
+            }),
+        );
+        const first = regions[0]!;
+        const [x, y] = first.rects[0]!;
         // XYZ の移動先は PDF のユーザー空間の座標で指定する。
-        const [left, top] = displayToUser(pageGeometry, [x - 24, y - 48]);
+        const [left, top] = displayToUser(first.geometry, [x - 24, y - 48]);
         viewer.scrollPageIntoView({
-            pageNumber: target.page,
+            pageNumber: first.page,
             destArray: [null, { name: 'XYZ' }, left, top, null],
             ignoreDestinationZoom: true,
         });
-        highlight = {
-            page: target.page,
-            rects: target.rects,
-            geometry: pageGeometry,
-            shownAt: null,
-        };
-        drawHighlight();
+        highlight = { regions, shownAt: null };
+        regions.forEach(drawHighlight);
     }
 
-    function drawHighlight(): void {
+    function drawHighlight(
+        region: PageRects & { geometry: PageGeometry },
+    ): void {
         if (!highlight) return;
-        const view = pageView(highlight.page);
+        const view = pageView(region.page);
         if (!view?.pdfPage) return;
         if (highlight.shownAt === null) {
             highlight.shownAt = Date.now();
@@ -257,8 +277,8 @@ export async function renderViewer(
             '--elapsed',
             `${Date.now() - highlight.shownAt}ms`,
         );
-        for (const rect of highlight.rects) {
-            const [x1, y1, x2, y2] = toUserSpace(highlight.geometry, rect);
+        for (const rect of region.rects) {
+            const [x1, y1, x2, y2] = toUserSpace(region.geometry, rect);
             const [a, b] = view.viewport.convertToViewportPoint(x1, y1) as [
                 number,
                 number,
@@ -281,7 +301,8 @@ export async function renderViewer(
         target: PdfLink,
         situation: 'updated' | 'missing',
     ): void {
-        const where = `p.${target.label ?? target.page}`;
+        const where = pagesText(target);
+        const start = `p.${target.label ?? firstPage(target)}`;
         const message = document.createElement('p');
         const search = '「目印で検索」で該当箇所を探してください。';
         if (situation === 'missing') {
@@ -303,8 +324,8 @@ export async function renderViewer(
         actions.className = 'banner-actions';
         if (situation === 'updated') {
             actions.append(
-                button(`${where} へ移動`, () => {
-                    linkService.page = target.page;
+                button(`${start} へ移動`, () => {
+                    linkService.page = firstPage(target);
                 }),
             );
         }
@@ -330,16 +351,15 @@ export async function renderViewer(
         openBanner(ui.banner, [message, detail, actions]);
     }
 
-    function pageOf(node: Node | null): {
-        page: number;
-        view: PageViewLike;
-        geometry: PageGeometry;
-        origin: DOMRect;
-    } | null {
+    function pageOf(node: Node | null): PageInfo | null {
         const element = node instanceof Element ? node : node?.parentElement;
         const pageDiv = element?.closest<HTMLElement>('.page');
         const page = Number(pageDiv?.dataset.pageNumber);
-        const view = page ? pageView(page) : undefined;
+        return page ? pageInfo(page) : null;
+    }
+
+    function pageInfo(page: number): PageInfo | null {
+        const view = pageView(page);
         // ページ要素には PDF.js の CSS が枠を付けるため、枠の内側と一致する .canvasWrapper を座標の原点にする。
         const canvas = view?.div.querySelector('.canvasWrapper');
         if (!view?.pdfPage || !canvas) return null;
@@ -368,49 +388,60 @@ export async function renderViewer(
         const current = document.getSelection();
         if (!current || current.isCollapsed || current.rangeCount === 0) return;
         const range = current.getRangeAt(0);
-        const target = pageOf(range.startContainer);
-        if (!target) return;
-        if (pageOf(range.endContainer)?.page !== target.page) {
-            toast(
-                ui.toast,
-                'ページをまたぐ選択からはリンクを作れません。ページごとに選択してください。',
-            );
-            return;
-        }
-        const { page, view, geometry: pageGeometry, origin } = target;
+        const start = pageOf(range.startContainer);
+        if (!start) return;
         // PDF.js のテキストレイヤーは空の要素や終端の要素を含み、getClientRects() が幅のない矩形やページ外の矩形を返すことがあるため除く。
-        const clientRects = [...range.getClientRects()].filter(
-            (rect) =>
-                rect.width > 0.5 &&
-                rect.height > 0.5 &&
-                rect.top >= origin.top - 1 &&
-                rect.bottom <= origin.bottom + 1,
+        const clientRects = textRects(range).filter(
+            (rect) => rect.width > 0.5 && rect.height > 0.5,
         );
-        const rects = mergeLineRects(
-            clientRects.map((rect) =>
-                toLinkRect(
-                    pageGeometry,
-                    toPdfPoint(view, origin, rect.left, rect.top),
-                    toPdfPoint(view, origin, rect.right, rect.bottom),
+        const bottom = Math.max(...clientRects.map((rect) => rect.bottom));
+        const regions: PageRects[] = [];
+        let anchor: DOMRect | undefined;
+        for (let page = start.page; page <= pdf.numPages; page++) {
+            const info = pageInfo(page);
+            if (!info || info.origin.top > bottom) break;
+            const { view, geometry: pageGeometry, origin } = info;
+            const inPage = clientRects.filter(
+                (rect) =>
+                    rect.top >= origin.top - 1 &&
+                    rect.bottom <= origin.bottom + 1,
+            );
+            const rects = mergeSelectionRects(
+                inPage.map((rect) =>
+                    toLinkRect(
+                        pageGeometry,
+                        toPdfPoint(view, origin, rect.left, rect.top),
+                        toPdfPoint(view, origin, rect.right, rect.bottom),
+                    ),
                 ),
-            ),
-        );
-        if (!rects.length) return;
-        if (rects.length > LIMITS.rects) {
+            );
+            if (!rects.length) continue;
+            regions.push({ page, rects });
+            anchor = inPage.at(-1);
+        }
+        if (!regions.length || !anchor) return;
+        if (regions.flatMap(({ rects }) => rects).length > LIMITS.rects) {
             toast(
                 ui.toast,
-                `選択が長すぎます。${LIMITS.rects} 行以内に狭めてください。`,
+                '選択した範囲が大きすぎます。範囲を狭めてください。',
             );
             return;
         }
-        const text = current.toString().replace(/\s+/g, ' ').trim();
+        // PDF.js の検索は 1 ページの中でしか一致しないため、目印は最初のページの部分から作る。
+        const text = selectedText(
+            range,
+            start.view.div.querySelector('.textLayer'),
+        )
+            .replace(/\s+/g, ' ')
+            .trim();
         const q = [...text].slice(0, QUOTE_CHARS).join('');
-        openPopup({ page, rects, q, anchor: clientRects.at(-1)! });
+        openPopup({ regions, q, anchor });
     }
 
     function openPopup(next: Selection): void {
         selection = next;
-        ui.popupSummary.textContent = `p.${labelOf(next.page) ?? next.page} の${mode === 'text' ? '文章' : '範囲'}（矩形 ${next.rects.length} 個）`;
+        const count = next.regions.flatMap(({ rects }) => rects).length;
+        ui.popupSummary.textContent = `${pagesText({ regions: next.regions, label: labelOf(firstPage(next)) })} の${mode === 'text' ? '文章' : '範囲'}（矩形 ${count} 個）`;
         ui.popupInput.value = next.q;
         ui.popup.hidden = false;
         const { innerWidth, innerHeight } = window;
@@ -433,10 +464,9 @@ export async function renderViewer(
         return {
             src,
             sha256,
-            page: selection.page,
-            rects: selection.rects,
-            ...(labelOf(selection.page)
-                ? { label: labelOf(selection.page) }
+            regions: selection.regions,
+            ...(labelOf(firstPage(selection))
+                ? { label: labelOf(firstPage(selection)) }
                 : {}),
             ...(q ? { q } : {}),
         };
@@ -472,7 +502,10 @@ export async function renderViewer(
                 'リンクをコピーしました',
             );
         } else if (action === 'copy-citation') {
-            void copy(citation(meta, target), '出典をコピーしました');
+            void copy(
+                citation(meta, pagesText(target), target.q),
+                '出典をコピーしました',
+            );
         }
     });
 
@@ -480,7 +513,11 @@ export async function renderViewer(
         ui.linkCitation.hidden = false;
         ui.linkCitation.addEventListener(
             'click',
-            () => void copy(citation(meta, link), '出典をコピーしました'),
+            () =>
+                void copy(
+                    citation(meta, pagesText(link), link.q),
+                    '出典をコピーしました',
+                ),
         );
     }
 
@@ -568,7 +605,11 @@ export async function renderViewer(
         );
         const rects = mergeLineRects([rect]);
         if (!rects.length || rect[2] < 2 || rect[3] < 2) return;
-        openPopup({ page: current.page, rects, q: '', anchor });
+        openPopup({
+            regions: [{ page: current.page, rects }],
+            q: '',
+            anchor,
+        });
     });
 
     for (const modeButton of ui.modeButtons) {
@@ -588,7 +629,8 @@ export async function renderViewer(
 
 function citation(
     meta: DocumentMetadata | null,
-    target: Pick<PdfLink, 'page' | 'label' | 'q'>,
+    pages: string,
+    q: string | undefined,
 ): string {
     const parts = [
         meta
@@ -599,8 +641,8 @@ function citation(
         meta?.title ?? '',
         meta?.publication ?? '',
         meta?.doi ? `https://doi.org/${meta.doi}` : '',
-        `p.${target.label ?? target.page}`,
-        target.q ? `「${target.q}」` : '',
+        pages,
+        q ? `「${q}」` : '',
     ];
     return parts.filter(Boolean).join('. ');
 }
@@ -610,6 +652,49 @@ async function digest(data: Uint8Array<ArrayBuffer>): Promise<string> {
     return [...new Uint8Array(hash)]
         .map((byte) => byte.toString(16).padStart(2, '0'))
         .join('');
+}
+
+function textRects(range: Range): DOMRect[] {
+    const root = range.commonAncestorContainer;
+    const walker = document.createTreeWalker(
+        root.nodeType === Node.TEXT_NODE ? root.parentNode! : root,
+        NodeFilter.SHOW_TEXT,
+    );
+    const rects: DOMRect[] = [];
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!range.intersectsNode(node)) continue;
+        if (!node.parentElement?.closest('.textLayer')) continue;
+        const part = document.createRange();
+        part.selectNodeContents(node);
+        if (node === range.startContainer)
+            part.setStart(node, range.startOffset);
+        if (node === range.endContainer) part.setEnd(node, range.endOffset);
+        rects.push(...part.getClientRects());
+    }
+    return rects;
+}
+
+function selectedText(range: Range, within: Element | null): string {
+    const root = range.commonAncestorContainer;
+    const walker = document.createTreeWalker(
+        root.nodeType === Node.TEXT_NODE ? root.parentNode! : root,
+        NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+    );
+    let text = '';
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!range.intersectsNode(node)) continue;
+        if (within && !within.contains(node)) continue;
+        if (node instanceof HTMLBRElement) {
+            text = text.endsWith('-') ? text.slice(0, -1) : `${text} `;
+        } else if (node.nodeType === Node.TEXT_NODE) {
+            const value = node.nodeValue ?? '';
+            const end =
+                node === range.endContainer ? range.endOffset : value.length;
+            const begin = node === range.startContainer ? range.startOffset : 0;
+            text += value.slice(begin, end);
+        }
+    }
+    return text;
 }
 
 function showBanner(banner: HTMLElement, message: string): void {

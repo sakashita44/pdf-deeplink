@@ -9,11 +9,15 @@ export const LIMITS = {
 
 export type Rect = readonly [x: number, y: number, w: number, h: number];
 
+export interface PageRects {
+    page: number;
+    rects: Rect[];
+}
+
 export interface PdfLink {
     src: string;
     sha256: string;
-    page: number;
-    rects: Rect[];
+    regions: PageRects[];
     label?: string;
     q?: string;
 }
@@ -51,16 +55,10 @@ export function parseLink(params: URLSearchParams): ParseResult {
     const sha256 = params.get('sha256') ?? '';
     if (!SHA256.test(sha256)) return { ok: false, error: 'invalid sha256' };
 
-    const pageText = params.get('page') ?? '';
-    const page = Number(pageText);
-    if (!/^[1-9]\d*$/.test(pageText) || !Number.isSafeInteger(page)) {
-        return { ok: false, error: 'invalid page' };
-    }
+    const regions = parseRegions(params.get('rects') ?? '');
+    if (!regions) return { ok: false, error: 'invalid rects' };
 
-    const rects = parseRects(params.get('rects') ?? '');
-    if (!rects) return { ok: false, error: 'invalid rects' };
-
-    const link: PdfLink = { src, sha256, page, rects };
+    const link: PdfLink = { src, sha256, regions };
     const label = params.get('label');
     if (label !== null && label !== '') {
         if ([...label].length > LIMITS.label)
@@ -75,38 +73,55 @@ export function parseLink(params: URLSearchParams): ParseResult {
     return { ok: true, link };
 }
 
-function parseRects(text: string): Rect[] | null {
+function parseRegions(text: string): PageRects[] | null {
     const parts = text.split(';');
     if (text === '' || parts.length > LIMITS.rects) return null;
-    const rects: Rect[] = [];
+    const regions: PageRects[] = [];
     for (const part of parts) {
-        const values = part.split(',');
-        if (values.length !== 4 || !values.every((value) => NUMBER.test(value)))
-            return null;
-        const [x, y, w, h] = values.map(Number) as [
-            number,
-            number,
-            number,
-            number,
-        ];
-        if ([x, y, w, h].some((value) => Math.abs(value) > LIMITS.coordinate))
-            return null;
-        if (w <= 0 || h <= 0) return null;
-        rects.push([x, y, w, h]);
+        const prefixed = /^([1-9]\d*):(.*)$/.exec(part);
+        let rectText = part;
+        if (prefixed) {
+            const page = Number(prefixed[1]);
+            const previous = regions.at(-1)?.page ?? 0;
+            if (!Number.isSafeInteger(page) || page <= previous) return null;
+            regions.push({ page, rects: [] });
+            rectText = prefixed[2]!;
+        }
+        const region = regions.at(-1);
+        const rect = parseRect(rectText);
+        if (!region || !rect) return null;
+        region.rects.push(rect);
     }
-    return rects;
+    return regions;
+}
+
+function parseRect(text: string): Rect | null {
+    const values = text.split(',');
+    if (values.length !== 4 || !values.every((value) => NUMBER.test(value)))
+        return null;
+    const [x, y, w, h] = values.map(Number) as [number, number, number, number];
+    if ([x, y, w, h].some((value) => Math.abs(value) > LIMITS.coordinate))
+        return null;
+    if (w <= 0 || h <= 0) return null;
+    return [x, y, w, h];
 }
 
 export function formatLink(link: PdfLink): string {
     const params = new URLSearchParams();
     params.set('src', link.src);
     params.set('sha256', link.sha256.slice(0, SHA256_LINK_LENGTH));
-    params.set('page', String(link.page));
     params.set(
         'rects',
-        link.rects
-            .map((rect) =>
-                rect.map((value) => roundCoordinate(value)).join(','),
+        link.regions
+            .map(({ page, rects }) =>
+                rects
+                    .map((rect) =>
+                        rect.map((value) => roundCoordinate(value)).join(','),
+                    )
+                    .map((rect, index) =>
+                        index === 0 ? `${page}:${rect}` : rect,
+                    )
+                    .join(';'),
             )
             .join(';'),
     );
