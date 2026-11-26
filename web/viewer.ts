@@ -22,6 +22,7 @@ import {
     isValidSrc,
     LIMITS,
     parseLink,
+    sameVersion,
     type PdfLink,
     type Rect,
 } from '../shared/link.ts';
@@ -104,13 +105,13 @@ export async function renderViewer(
     const link = parsed.ok ? parsed.link : null;
     const src = link?.src ?? params.get('src') ?? '';
     if (!isValidSrc(src)) {
-        showBanner(ui.banner, 'リンクの形式が正しくありません。');
+        showBanner(ui.banner, 'リンクから文献を特定できませんでした。');
         return;
     }
     if (!link && [...params.keys()].some((key) => key !== 'src')) {
         showBanner(
             ui.banner,
-            `リンクの形式が正しくありません（${parsed.ok ? '' : parsed.error}）。文書だけを開きます。`,
+            'リンクの一部が正しくないため、該当箇所を表示できません。文書の先頭を表示しています。',
         );
     }
 
@@ -122,7 +123,9 @@ export async function renderViewer(
     if (!fileResponse.ok) {
         showBanner(
             ui.banner,
-            `PDF を取得できませんでした（HTTP ${fileResponse.status}）。`,
+            fileResponse.status === 404
+                ? 'リンクが指す PDF が見つかりません。文献や PDF が削除されたか、別の PDF に差し替えられた可能性があります。'
+                : `PDF を読み込めませんでした（HTTP ${fileResponse.status}）。`,
         );
         return;
     }
@@ -189,10 +192,13 @@ export async function renderViewer(
         viewer.currentScaleValue = 'page-width';
         ui.pageLabel.textContent = `p.${labelOf(1) ?? 1} / ${pdf.numPages}`;
         if (!link) return;
-        if (link.sha256 === sha256 && link.page <= pdf.numPages) {
-            void showHighlight(link);
-        } else {
-            showMismatch(link);
+        if (link.page > pdf.numPages) {
+            showNotice(link, 'missing');
+            return;
+        }
+        void showHighlight(link);
+        if (!sameVersion(link.sha256, sha256)) {
+            showNotice(link, 'updated');
         }
     });
 
@@ -271,22 +277,37 @@ export async function renderViewer(
         view.div.append(layer);
     }
 
-    function showMismatch(target: PdfLink): void {
+    function showNotice(
+        target: PdfLink,
+        situation: 'updated' | 'missing',
+    ): void {
         const where = `p.${target.label ?? target.page}`;
-        ui.banner.replaceChildren();
         const message = document.createElement('p');
-        message.textContent =
-            target.page > pdf.numPages && target.sha256 === sha256
-                ? 'リンクのページがこの PDF にありません。'
-                : 'この PDF はリンクの作成後に差し替えられたため、範囲を表示していません。';
+        const search = '「目印で検索」で該当箇所を探してください。';
+        if (situation === 'missing') {
+            message.textContent = `リンクが指すページがこの PDF にありません。PDF が差し替えられた可能性があります。${
+                target.q
+                    ? search
+                    : 'リンクの作成者に、指している箇所を確認してください。'
+            }`;
+        } else {
+            message.textContent = `この PDF はリンクの作成後に更新されています。${
+                target.q
+                    ? `強調表示の位置がずれている場合は、${search}`
+                    : '強調表示の位置がずれている可能性があります。'
+            }`;
+        }
         const detail = document.createElement('p');
         detail.textContent = `作成時の箇所: ${where}${target.q ? `「${target.q}」` : ''}`;
         const actions = document.createElement('div');
         actions.className = 'banner-actions';
-        const jump = button(`${where} へ移動`, () => {
-            linkService.page = Math.min(target.page, pdf.numPages);
-        });
-        actions.append(jump);
+        if (situation === 'updated') {
+            actions.append(
+                button(`${where} へ移動`, () => {
+                    linkService.page = target.page;
+                }),
+            );
+        }
         if (target.q) {
             const query = target.q;
             let searched = false;
@@ -306,8 +327,7 @@ export async function renderViewer(
                 }),
             );
         }
-        ui.banner.append(message, detail, actions);
-        ui.banner.hidden = false;
+        openBanner(ui.banner, [message, detail, actions]);
     }
 
     function pageOf(node: Node | null): {
@@ -427,7 +447,10 @@ export async function renderViewer(
             await navigator.clipboard.writeText(text);
             toast(ui.toast, done);
         } catch {
-            window.prompt('コピーしてください', text);
+            window.prompt(
+                'クリップボードにコピーできませんでした。表示されている内容を手動でコピーしてください。',
+                text,
+            );
         }
     }
 
@@ -590,7 +613,21 @@ async function digest(data: Uint8Array<ArrayBuffer>): Promise<string> {
 }
 
 function showBanner(banner: HTMLElement, message: string): void {
-    banner.textContent = message;
+    const text = document.createElement('p');
+    text.textContent = message;
+    openBanner(banner, [text]);
+}
+
+function openBanner(banner: HTMLElement, content: HTMLElement[]): void {
+    const body = document.createElement('div');
+    body.className = 'banner-body';
+    body.append(...content);
+    const close = button('×', () => {
+        banner.hidden = true;
+    });
+    close.className = 'banner-close';
+    close.setAttribute('aria-label', '閉じる');
+    banner.replaceChildren(body, close);
     banner.hidden = false;
 }
 

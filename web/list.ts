@@ -88,7 +88,7 @@ export function renderList(app: HTMLElement): void {
         } catch (error) {
             if (request !== latest) return;
             const detail = error instanceof Error ? `（${error.message}）` : '';
-            status.textContent = `文献を読み込めませんでした${detail}。時間をおいて、もう一度お試しください。`;
+            status.textContent = `文献を読み込めませんでした${detail}。`;
             return;
         }
         if (request !== latest) return;
@@ -103,7 +103,7 @@ export function renderList(app: HTMLElement): void {
         status.textContent =
             result.total === 0
                 ? '該当する文献はありません。'
-                : `全 ${result.total} 件中 ${first}〜${last} 件を表示${result.truncated ? '（検索対象が多いため、一部の文献だけを対象にしています）' : ''}`;
+                : `全 ${result.total} 件中 ${first}〜${last} 件を表示${result.truncated ? '（先頭の 5,000 件だけを検索しています）' : ''}`;
         renderPagination(pagination, state.page, pages, (page) =>
             navigate({ ...state, page }),
         );

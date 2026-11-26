@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { formatLink, parseLink, type PdfLink } from './link.ts';
+import { formatLink, parseLink, sameVersion, type PdfLink } from './link.ts';
 
 interface Vectors {
     parse: { name: string; query: string; link?: PdfLink; error?: string }[];
     format: { name: string; link: PdfLink; query: string }[];
+    sameVersion: { name: string; link: string; pdf: string; same: boolean }[];
 }
 
 const vectors: Vectors = JSON.parse(
@@ -28,5 +29,11 @@ for (const vector of vectors.format) {
         assert.equal(formatLink(vector.link), vector.query);
         const reparsed = parseLink(new URLSearchParams(vector.query));
         assert.ok(reparsed.ok);
+    });
+}
+
+for (const vector of vectors.sameVersion) {
+    test(`sameVersion: ${vector.name}`, () => {
+        assert.equal(sameVersion(vector.link, vector.pdf), vector.same);
     });
 }

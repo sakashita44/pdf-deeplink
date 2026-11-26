@@ -22,11 +22,16 @@ export type ParseResult =
     { ok: true; link: PdfLink } | { ok: false; error: string };
 
 const ZOTERO_SRC = /^zotero:[A-Z0-9]{8}$/;
-const SHA256 = /^[0-9a-f]{64}$/;
+const SHA256 = /^[0-9a-f]{16,64}$/;
+const SHA256_LINK_LENGTH = 16;
 const NUMBER = /^-?\d+(\.\d+)?$/;
 
 export function isValidSrc(src: string): boolean {
     return ZOTERO_SRC.test(src);
+}
+
+export function sameVersion(linkSha256: string, pdfSha256: string): boolean {
+    return pdfSha256.startsWith(linkSha256);
 }
 
 export function roundCoordinate(value: number): number {
@@ -95,7 +100,7 @@ function parseRects(text: string): Rect[] | null {
 export function formatLink(link: PdfLink): string {
     const params = new URLSearchParams();
     params.set('src', link.src);
-    params.set('sha256', link.sha256);
+    params.set('sha256', link.sha256.slice(0, SHA256_LINK_LENGTH));
     params.set('page', String(link.page));
     params.set(
         'rects',
