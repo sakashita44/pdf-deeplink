@@ -105,13 +105,16 @@ export async function renderViewer(
     const link = parsed.ok ? parsed.link : null;
     const src = link?.src ?? params.get('src') ?? '';
     if (!isValidSrc(src)) {
-        showBanner(ui.banner, 'リンクの形式が正しくありません。');
+        showBanner(
+            ui.banner,
+            'リンクから文献を特定できません。リンクが途中で切れていないか確認し、元のリンクをコピーし直してください。',
+        );
         return;
     }
     if (!link && [...params.keys()].some((key) => key !== 'src')) {
         showBanner(
             ui.banner,
-            `リンクの形式が正しくありません（${parsed.ok ? '' : parsed.error}）。文書だけを開きます。`,
+            'リンクの一部が正しくないため、該当箇所を表示できません。文書の先頭を表示しています。リンクが途中で切れていないか確認し、元のリンクをコピーし直してください。',
         );
     }
 
@@ -123,7 +126,9 @@ export async function renderViewer(
     if (!fileResponse.ok) {
         showBanner(
             ui.banner,
-            `PDF を取得できませんでした（HTTP ${fileResponse.status}）。`,
+            fileResponse.status === 404
+                ? 'リンクが指す PDF が見つかりません。文献や PDF が削除されたか、別の PDF に差し替えられた可能性があります。'
+                : `PDF を読み込めませんでした（HTTP ${fileResponse.status}）。時間をおいて開き直してください。解決しない場合は、サーバの管理者に連絡してください。`,
         );
         return;
     }
@@ -191,15 +196,12 @@ export async function renderViewer(
         ui.pageLabel.textContent = `p.${labelOf(1) ?? 1} / ${pdf.numPages}`;
         if (!link) return;
         if (link.page > pdf.numPages) {
-            showNotice(link, 'リンクのページがこの PDF にありません。');
+            showNotice(link, 'missing');
             return;
         }
         void showHighlight(link);
         if (!sameVersion(link.sha256, sha256)) {
-            showNotice(
-                link,
-                'この PDF はリンクの作成後に更新されています。強調表示の位置がずれている可能性があります。',
-            );
+            showNotice(link, 'updated');
         }
     });
 
@@ -278,19 +280,38 @@ export async function renderViewer(
         view.div.append(layer);
     }
 
-    function showNotice(target: PdfLink, text: string): void {
+    function showNotice(
+        target: PdfLink,
+        situation: 'updated' | 'missing',
+    ): void {
         const where = `p.${target.label ?? target.page}`;
         ui.banner.replaceChildren();
         const message = document.createElement('p');
-        message.textContent = text;
+        const search = '「目印で検索」で該当箇所を探してください。';
+        if (situation === 'missing') {
+            message.textContent = `リンクが指すページがこの PDF にありません。PDF が差し替えられた可能性があります。${
+                target.q
+                    ? search
+                    : 'リンクの作成者に、指している箇所を確認してください。'
+            }`;
+        } else {
+            message.textContent = `この PDF はリンクの作成後に更新されています。${
+                target.q
+                    ? `強調表示の位置がずれている場合は、${search}`
+                    : '強調表示の位置がずれている可能性があります。'
+            }`;
+        }
         const detail = document.createElement('p');
         detail.textContent = `作成時の箇所: ${where}${target.q ? `「${target.q}」` : ''}`;
         const actions = document.createElement('div');
         actions.className = 'banner-actions';
-        const jump = button(`${where} へ移動`, () => {
-            linkService.page = Math.min(target.page, pdf.numPages);
-        });
-        actions.append(jump);
+        if (situation === 'updated') {
+            actions.append(
+                button(`${where} へ移動`, () => {
+                    linkService.page = target.page;
+                }),
+            );
+        }
         if (target.q) {
             const query = target.q;
             let searched = false;

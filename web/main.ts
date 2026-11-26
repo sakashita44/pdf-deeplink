@@ -12,7 +12,7 @@ if (location.pathname === '/view') {
             message.className = 'banner';
             message.setAttribute('role', 'alert');
             message.textContent =
-                'PDF を表示できませんでした。接続先とファイルを確認してください。';
+                'PDF を表示できませんでした。時間をおいて開き直してください。解決しない場合は、サーバの管理者に連絡してください。';
             app.prepend(message);
         },
     );
