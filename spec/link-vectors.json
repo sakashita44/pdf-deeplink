@@ -11,7 +11,7 @@
         },
         {
             "name": "版を明示し、複数の矩形と目印を持つ",
-            "query": "v=1&src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&rects=12:72,140,240,18;72,158,180,18&label=iv&q=%E5%9B%B32",
+            "query": "v=1&src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&rects=12:72,140,240,18_72,158,180,18&label=iv&q=%E5%9B%B32",
             "link": {
                 "src": "zotero:ABCD1234",
                 "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -30,7 +30,7 @@
         },
         {
             "name": "複数のページにまたがる",
-            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=3:72,700,240,18;4:72,60,240,40;72,100,120,18",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=3:72,700,240,18_4:72,60,240,40_72,100,120,18",
             "link": {
                 "src": "zotero:ABCD1234",
                 "sha256": "0123456789abcdef",
@@ -87,12 +87,12 @@
         },
         {
             "name": "ページが昇順でない",
-            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=4:0,0,1,1;3:0,0,1,1",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=4:0,0,1,1_3:0,0,1,1",
             "error": "invalid rects"
         },
         {
             "name": "ページに矩形がない",
-            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=3:;4:0,0,1,1",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=3:_4:0,0,1,1",
             "error": "invalid rects"
         },
         {
@@ -112,8 +112,56 @@
         },
         {
             "name": "矩形の数がページの合計で上限を超える",
-            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=1:0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;2:0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1;0,0,1,1",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=1:0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_2:0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1_0,0,1,1",
             "error": "invalid rects"
+        },
+        {
+            "name": "ページが同じ番号を繰り返す",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=3:0,0,1,1_3:0,0,1,1",
+            "error": "invalid rects"
+        },
+        {
+            "name": "ページが上限を超える",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=100001:0,0,1,1",
+            "error": "invalid rects"
+        },
+        {
+            "name": "ページに先頭の 0 がある",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=03:0,0,1,1",
+            "error": "invalid rects"
+        },
+        {
+            "name": "座標が上限を超える",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=1:100000.1,0,1,1",
+            "error": "invalid rects"
+        },
+        {
+            "name": "負の座標と負の 0 を受け付け、負の 0 は 0 とする",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=1:-10.5,-0,1,1",
+            "link": {
+                "src": "zotero:ABCD1234",
+                "sha256": "0123456789abcdef",
+                "regions": [{ "page": 1, "rects": [[-10.5, 0, 1, 1]] }]
+            }
+        },
+        {
+            "name": "同じ名前のパラメータが複数ある",
+            "query": "src=zotero:ABCD1234&src=zotero:EFGH5678&sha256=0123456789abcdef&rects=1:0,0,1,1",
+            "error": "duplicate parameter: src"
+        },
+        {
+            "name": "目印が上限を超える",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=1:0,0,1,1&q=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "error": "q too long"
+        },
+        {
+            "name": "空の目印とページラベルは省略と同じに扱う",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=1:0,0,1,1&label=&q=",
+            "link": {
+                "src": "zotero:ABCD1234",
+                "sha256": "0123456789abcdef",
+                "regions": [{ "page": 1, "rects": [[0, 0, 1, 1]] }]
+            }
         }
     ],
     "format": [
@@ -146,7 +194,18 @@
                 ],
                 "label": "iv"
             },
-            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=3:72,700,240,18;4:72,60,240,40;72,100,120,18&label=iv"
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=3:72,700,240,18_4:72,60,240,40_72,100,120,18&label=iv"
+        },
+        {
+            "name": "丸めて 0 になる幅と高さは 0.1 にし、目印とページラベルの記号は符号化する",
+            "link": {
+                "src": "zotero:ABCD1234",
+                "sha256": "0123456789abcdef",
+                "regions": [{ "page": 1, "rects": [[0, 0, 0.04, 0.02]] }],
+                "label": "iv–v",
+                "q": "a; b, c:"
+            },
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&rects=1:0,0,0.1,0.1&label=iv%E2%80%93v&q=a%3B+b%2C+c%3A"
         }
     ],
     "sameVersion": [

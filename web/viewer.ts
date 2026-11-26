@@ -10,7 +10,6 @@ import {
 import 'pdfjs-dist/web/pdf_viewer.css';
 import {
     displayToUser,
-    mergeLineRects,
     mergeSelectionRects,
     toLinkRect,
     toUserSpace,
@@ -27,6 +26,7 @@ import {
     type PageRects,
     type PdfLink,
 } from '../shared/link.ts';
+import { normalizeQuote } from '../shared/quote.ts';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 const PDFJS_ASSETS = new URL('/pdfjs/', location.origin).href;
@@ -190,10 +190,17 @@ export async function renderViewer(
         target.regions[0]!.page;
     const lastPage = (target: { regions: PageRects[] }) =>
         target.regions.at(-1)!.page;
+    const labelRange = (regions: PageRects[]) => {
+        const start = labelOf(regions[0]!.page);
+        const end = labelOf(regions.at(-1)!.page);
+        if (!start || !end) return undefined;
+        return start === end ? start : `${start}–${end}`;
+    };
     const pagesText = (target: { regions: PageRects[]; label?: string }) => {
-        const start = target.label ?? firstPage(target);
-        if (firstPage(target) === lastPage(target)) return `p.${start}`;
-        return `p.${start}–${labelOf(lastPage(target)) ?? lastPage(target)}`;
+        if (target.label) return `p.${target.label}`;
+        const start = firstPage(target);
+        const end = lastPage(target);
+        return start === end ? `p.${start}` : `p.${start}–${end}`;
     };
 
     let highlight: {
@@ -302,7 +309,6 @@ export async function renderViewer(
         situation: 'updated' | 'missing',
     ): void {
         const where = pagesText(target);
-        const start = `p.${target.label ?? firstPage(target)}`;
         const message = document.createElement('p');
         const search = '「目印で検索」で該当箇所を探してください。';
         if (situation === 'missing') {
@@ -324,7 +330,7 @@ export async function renderViewer(
         actions.className = 'banner-actions';
         if (situation === 'updated') {
             actions.append(
-                button(`${start} へ移動`, () => {
+                button('作成時のページへ移動', () => {
                     linkService.page = firstPage(target);
                 }),
             );
@@ -387,17 +393,28 @@ export async function renderViewer(
     function handleTextSelection(): void {
         const current = document.getSelection();
         if (!current || current.isCollapsed || current.rangeCount === 0) return;
-        const pages = selectedPages(current.getRangeAt(0));
         const regions: PageRects[] = [];
+        const texts: string[] = [];
         let anchor: DOMRect | undefined;
-        for (const selected of pages) {
+        for (const selected of selectedPages(current.getRangeAt(0))) {
             const info = pageInfo(selected.page);
             if (!info) continue;
             const { page, view, geometry: pageGeometry, origin } = info;
-            // PDF.js のテキストレイヤーは空白だけの要素を含み、getClientRects() が幅のない矩形を返すことがあるため除く。
-            const inPage = selected.rects.filter(
-                (rect) => rect.width > 0.5 && rect.height > 0.5,
-            );
+            // PDF.js のテキストレイヤーは空白だけの要素を含み、getClientRects() が幅のない矩形を返すことがある。また CropBox の外にある文字も要素として置き、CSS で隠しているため、ページの表示領域と重ならない矩形も除く。
+            const visible = (rect: DOMRect) =>
+                rect.width > 0.5 &&
+                rect.height > 0.5 &&
+                rect.right > origin.left &&
+                rect.left < origin.right &&
+                rect.bottom > origin.top &&
+                rect.top < origin.bottom;
+            const parts = selected.parts
+                .map(({ rects, text }) => ({
+                    text,
+                    rects: rects.filter(visible),
+                }))
+                .filter(({ rects, text }) => text === '\n' || rects.length);
+            const inPage = parts.flatMap(({ rects }) => rects);
             const rects = mergeSelectionRects(
                 inPage.map((rect) =>
                     toLinkRect(
@@ -409,6 +426,7 @@ export async function renderViewer(
             );
             if (!rects.length) continue;
             regions.push({ page, rects });
+            texts.push(parts.map(({ text }) => text).join(''));
             anchor = inPage.at(-1);
         }
         if (!regions.length || !anchor) return;
@@ -420,19 +438,16 @@ export async function renderViewer(
             return;
         }
         // PDFFindController はページごとに文字列を照合し、ページをまたいで一致しないため、目印は最初のページの部分から作る。
-        const text = (
-            pages.find(({ page }) => page === regions[0]!.page)?.text ?? ''
-        )
-            .replace(/\s+/g, ' ')
-            .trim();
-        const q = [...text].slice(0, QUOTE_CHARS).join('');
+        const q = [...normalizeQuote(texts[0] ?? '')]
+            .slice(0, QUOTE_CHARS)
+            .join('');
         openPopup({ regions, q, anchor });
     }
 
     function openPopup(next: Selection): void {
         selection = next;
         const count = next.regions.flatMap(({ rects }) => rects).length;
-        ui.popupSummary.textContent = `${pagesText({ regions: next.regions, label: labelOf(firstPage(next)) })} の${mode === 'text' ? '文章' : '範囲'}（矩形 ${count} 個）`;
+        ui.popupSummary.textContent = `${pagesText({ regions: next.regions, label: labelRange(next.regions) })} の${mode === 'text' ? '文章' : '範囲'}（矩形 ${count} 個）`;
         ui.popupInput.value = next.q;
         ui.popup.hidden = false;
         const { innerWidth, innerHeight } = window;
@@ -440,7 +455,9 @@ export async function renderViewer(
         const height = ui.popup.offsetHeight;
         ui.popup.style.left = `${Math.max(8, Math.min(next.anchor.left, innerWidth - width - 8))}px`;
         const below = next.anchor.bottom + 8;
-        ui.popup.style.top = `${below + height > innerHeight ? Math.max(8, next.anchor.top - height - 8) : below}px`;
+        const top =
+            below + height > innerHeight ? next.anchor.top - height - 8 : below;
+        ui.popup.style.top = `${Math.max(8, Math.min(top, innerHeight - height - 8))}px`;
         if (mode === 'area') ui.popupInput.focus();
     }
 
@@ -456,8 +473,8 @@ export async function renderViewer(
             src,
             sha256,
             regions: selection.regions,
-            ...(labelOf(firstPage(selection))
-                ? { label: labelOf(firstPage(selection)) }
+            ...(labelRange(selection.regions)
+                ? { label: labelRange(selection.regions) }
                 : {}),
             ...(q ? { q } : {}),
         };
@@ -520,7 +537,7 @@ export async function renderViewer(
         if (
             mode === 'text' &&
             document.getSelection()?.isCollapsed &&
-            document.activeElement !== ui.popupInput
+            !ui.popup.contains(document.activeElement)
         )
             closePopup();
     });
@@ -594,10 +611,9 @@ export async function renderViewer(
             current.start,
             toPdfPoint(current.view, origin, x, y),
         );
-        const rects = mergeLineRects([rect]);
-        if (!rects.length || rect[2] < 2 || rect[3] < 2) return;
+        if (rect[2] < 2 || rect[3] < 2) return;
         openPopup({
-            regions: [{ page: current.page, rects }],
+            regions: [{ page: current.page, rects: [rect] }],
             q: '',
             anchor,
         });
@@ -645,10 +661,14 @@ async function digest(data: Uint8Array<ArrayBuffer>): Promise<string> {
         .join('');
 }
 
-interface SelectedPage {
-    page: number;
+interface SelectedPart {
     rects: DOMRect[];
     text: string;
+}
+
+interface SelectedPage {
+    page: number;
+    parts: SelectedPart[];
 }
 
 // Range.getClientRects() は、範囲に含まれる要素の境界ボックスも返す。ページをまたぐ選択では PDF.js の .canvasWrapper や .annotationLayer がページ全体の矩形として含まれるため、テキストレイヤー内のテキストノードごとに矩形を取る。
@@ -668,21 +688,21 @@ function selectedPages(range: Range): SelectedPage[] {
             layer?.closest<HTMLElement>('.page')?.dataset.pageNumber,
         );
         if (!page) continue;
-        if (!pages.has(page)) pages.set(page, { page, rects: [], text: '' });
+        if (!pages.has(page)) pages.set(page, { page, parts: [] });
         const selected = pages.get(page)!;
-        // PDF.js のテキストレイヤーは行末に <br> を置き、行の文字列の末尾に空白を持たないことがある。PDFFindController は行末のハイフンと改行を除いて語をつなぐため、目印で検索して一致するよう、<br> では直前のハイフンを除き、それ以外は空白を補う。
+        // PDF.js のテキストレイヤーは行末に <br> を置き、行の文字列の末尾に空白を持たないことがある。
         if (node instanceof HTMLBRElement) {
-            selected.text = selected.text.endsWith('-')
-                ? selected.text.slice(0, -1)
-                : `${selected.text} `;
+            selected.parts.push({ rects: [], text: '\n' });
         } else if (node.nodeType === Node.TEXT_NODE) {
             const part = document.createRange();
             part.selectNodeContents(node);
             if (node === range.startContainer)
                 part.setStart(node, range.startOffset);
             if (node === range.endContainer) part.setEnd(node, range.endOffset);
-            selected.rects.push(...part.getClientRects());
-            selected.text += part.toString();
+            selected.parts.push({
+                rects: [...part.getClientRects()],
+                text: part.toString(),
+            });
         }
     }
     return [...pages.values()].sort((a, b) => a.page - b.page);
