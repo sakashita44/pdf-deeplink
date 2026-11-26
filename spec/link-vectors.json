@@ -26,6 +26,21 @@
             }
         },
         {
+            "name": "SHA-256 の先頭 16 桁",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&page=1&rects=0,0,1,1",
+            "link": {
+                "src": "zotero:ABCD1234",
+                "sha256": "0123456789abcdef",
+                "page": 1,
+                "rects": [[0, 0, 1, 1]]
+            }
+        },
+        {
+            "name": "SHA-256 が 16 桁未満",
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcde&page=1&rects=0,0,1,1",
+            "error": "invalid sha256"
+        },
+        {
             "name": "未対応の版",
             "query": "v=2&src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&page=1&rects=0,0,1,1",
             "error": "unsupported version: 2"
@@ -63,7 +78,7 @@
     ],
     "format": [
         {
-            "name": "座標を小数第 1 位に丸め、v=1 は省く",
+            "name": "座標を小数第 1 位に丸め、SHA-256 を先頭 16 桁にし、v=1 は省く",
             "link": {
                 "src": "zotero:ABCD1234",
                 "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -71,7 +86,27 @@
                 "rects": [[72.04, 140.06, 239.95, 18]],
                 "q": "図2"
             },
-            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&page=2&rects=72,140.1,240,18&q=%E5%9B%B32"
+            "query": "src=zotero:ABCD1234&sha256=0123456789abcdef&page=2&rects=72,140.1,240,18&q=%E5%9B%B32"
+        }
+    ],
+    "sameVersion": [
+        {
+            "name": "先頭 16 桁が一致する",
+            "link": "0123456789abcdef",
+            "pdf": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "same": true
+        },
+        {
+            "name": "64 桁すべてが一致する",
+            "link": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "pdf": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "same": true
+        },
+        {
+            "name": "先頭 16 桁が異なる",
+            "link": "fedcba9876543210",
+            "pdf": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "same": false
         }
     ]
 }

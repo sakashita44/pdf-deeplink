@@ -22,6 +22,7 @@ import {
     isValidSrc,
     LIMITS,
     parseLink,
+    sameVersion,
     type PdfLink,
     type Rect,
 } from '../shared/link.ts';
@@ -189,10 +190,16 @@ export async function renderViewer(
         viewer.currentScaleValue = 'page-width';
         ui.pageLabel.textContent = `p.${labelOf(1) ?? 1} / ${pdf.numPages}`;
         if (!link) return;
-        if (link.sha256 === sha256 && link.page <= pdf.numPages) {
-            void showHighlight(link);
-        } else {
-            showMismatch(link);
+        if (link.page > pdf.numPages) {
+            showNotice(link, 'リンクのページがこの PDF にありません。');
+            return;
+        }
+        void showHighlight(link);
+        if (!sameVersion(link.sha256, sha256)) {
+            showNotice(
+                link,
+                'この PDF はリンクの作成後に更新されています。強調表示の位置がずれている可能性があります。',
+            );
         }
     });
 
@@ -271,14 +278,11 @@ export async function renderViewer(
         view.div.append(layer);
     }
 
-    function showMismatch(target: PdfLink): void {
+    function showNotice(target: PdfLink, text: string): void {
         const where = `p.${target.label ?? target.page}`;
         ui.banner.replaceChildren();
         const message = document.createElement('p');
-        message.textContent =
-            target.page > pdf.numPages && target.sha256 === sha256
-                ? 'リンクのページがこの PDF にありません。'
-                : 'この PDF はリンクの作成後に差し替えられたため、範囲を表示していません。';
+        message.textContent = text;
         const detail = document.createElement('p');
         detail.textContent = `作成時の箇所: ${where}${target.q ? `「${target.q}」` : ''}`;
         const actions = document.createElement('div');
