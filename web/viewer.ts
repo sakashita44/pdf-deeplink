@@ -237,7 +237,7 @@ export async function renderViewer(
             target.regions.map(async (region) => {
                 const pdfPage = await pdf.getPage(region.page);
                 const view = pageView(region.page);
-                // PDF.js は 2 ページ目以降のページ情報を遅れて設定し、それまでは 1 ページ目の寸法で位置を計算する。移動の前に対象ページの情報を設定する。
+                // PDF.js は 2 ページ目以降のページ情報を遅れて設定し、それまでは 1 ページ目の寸法で位置を計算する。移動と強調の描画の前に、対象の各ページの情報を設定する。
                 if (view && !view.pdfPage) view.setPdfPage(pdfPage);
                 return { ...region, geometry: geometry(pdfPage) };
             }),
@@ -387,24 +387,16 @@ export async function renderViewer(
     function handleTextSelection(): void {
         const current = document.getSelection();
         if (!current || current.isCollapsed || current.rangeCount === 0) return;
-        const range = current.getRangeAt(0);
-        const start = pageOf(range.startContainer);
-        if (!start) return;
-        // PDF.js のテキストレイヤーは空の要素や終端の要素を含み、getClientRects() が幅のない矩形やページ外の矩形を返すことがあるため除く。
-        const clientRects = textRects(range).filter(
-            (rect) => rect.width > 0.5 && rect.height > 0.5,
-        );
-        const bottom = Math.max(...clientRects.map((rect) => rect.bottom));
+        const pages = selectedPages(current.getRangeAt(0));
         const regions: PageRects[] = [];
         let anchor: DOMRect | undefined;
-        for (let page = start.page; page <= pdf.numPages; page++) {
-            const info = pageInfo(page);
-            if (!info || info.origin.top > bottom) break;
-            const { view, geometry: pageGeometry, origin } = info;
-            const inPage = clientRects.filter(
-                (rect) =>
-                    rect.top >= origin.top - 1 &&
-                    rect.bottom <= origin.bottom + 1,
+        for (const selected of pages) {
+            const info = pageInfo(selected.page);
+            if (!info) continue;
+            const { page, view, geometry: pageGeometry, origin } = info;
+            // PDF.js のテキストレイヤーは空白だけの要素を含み、getClientRects() が幅のない矩形を返すことがあるため除く。
+            const inPage = selected.rects.filter(
+                (rect) => rect.width > 0.5 && rect.height > 0.5,
             );
             const rects = mergeSelectionRects(
                 inPage.map((rect) =>
@@ -427,10 +419,9 @@ export async function renderViewer(
             );
             return;
         }
-        // PDF.js の検索は 1 ページの中でしか一致しないため、目印は最初のページの部分から作る。
-        const text = selectedText(
-            range,
-            start.view.div.querySelector('.textLayer'),
+        // PDFFindController はページごとに文字列を照合し、ページをまたいで一致しないため、目印は最初のページの部分から作る。
+        const text = (
+            pages.find(({ page }) => page === regions[0]!.page)?.text ?? ''
         )
             .replace(/\s+/g, ' ')
             .trim();
@@ -654,47 +645,47 @@ async function digest(data: Uint8Array<ArrayBuffer>): Promise<string> {
         .join('');
 }
 
-function textRects(range: Range): DOMRect[] {
-    const root = range.commonAncestorContainer;
-    const walker = document.createTreeWalker(
-        root.nodeType === Node.TEXT_NODE ? root.parentNode! : root,
-        NodeFilter.SHOW_TEXT,
-    );
-    const rects: DOMRect[] = [];
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-        if (!range.intersectsNode(node)) continue;
-        if (!node.parentElement?.closest('.textLayer')) continue;
-        const part = document.createRange();
-        part.selectNodeContents(node);
-        if (node === range.startContainer)
-            part.setStart(node, range.startOffset);
-        if (node === range.endContainer) part.setEnd(node, range.endOffset);
-        rects.push(...part.getClientRects());
-    }
-    return rects;
+interface SelectedPage {
+    page: number;
+    rects: DOMRect[];
+    text: string;
 }
 
-function selectedText(range: Range, within: Element | null): string {
+// Range.getClientRects() は、範囲に含まれる要素の境界ボックスも返す。ページをまたぐ選択では PDF.js の .canvasWrapper や .annotationLayer がページ全体の矩形として含まれるため、テキストレイヤー内のテキストノードごとに矩形を取る。
+function selectedPages(range: Range): SelectedPage[] {
     const root = range.commonAncestorContainer;
     const walker = document.createTreeWalker(
         root.nodeType === Node.TEXT_NODE ? root.parentNode! : root,
         NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
     );
-    let text = '';
+    const pages = new Map<number, SelectedPage>();
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
         if (!range.intersectsNode(node)) continue;
-        if (within && !within.contains(node)) continue;
+        const layer = (
+            node instanceof Element ? node : node.parentElement
+        )?.closest('.textLayer');
+        const page = Number(
+            layer?.closest<HTMLElement>('.page')?.dataset.pageNumber,
+        );
+        if (!page) continue;
+        if (!pages.has(page)) pages.set(page, { page, rects: [], text: '' });
+        const selected = pages.get(page)!;
+        // PDF.js のテキストレイヤーは行末に <br> を置き、行の文字列の末尾に空白を持たないことがある。PDFFindController は行末のハイフンと改行を除いて語をつなぐため、目印で検索して一致するよう、<br> では直前のハイフンを除き、それ以外は空白を補う。
         if (node instanceof HTMLBRElement) {
-            text = text.endsWith('-') ? text.slice(0, -1) : `${text} `;
+            selected.text = selected.text.endsWith('-')
+                ? selected.text.slice(0, -1)
+                : `${selected.text} `;
         } else if (node.nodeType === Node.TEXT_NODE) {
-            const value = node.nodeValue ?? '';
-            const end =
-                node === range.endContainer ? range.endOffset : value.length;
-            const begin = node === range.startContainer ? range.startOffset : 0;
-            text += value.slice(begin, end);
+            const part = document.createRange();
+            part.selectNodeContents(node);
+            if (node === range.startContainer)
+                part.setStart(node, range.startOffset);
+            if (node === range.endContainer) part.setEnd(node, range.endOffset);
+            selected.rects.push(...part.getClientRects());
+            selected.text += part.toString();
         }
     }
-    return text;
+    return [...pages.values()].sort((a, b) => a.page - b.page);
 }
 
 function showBanner(banner: HTMLElement, message: string): void {

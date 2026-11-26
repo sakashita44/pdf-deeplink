@@ -114,6 +114,7 @@ export function mergeSelectionRects(rects: Rect[]): Rect[] {
     );
 }
 
+// 横方向に狭いほうの幅の半分以上が重なり、行間が行の高さ以内であれば同じ段組みの続きの行とみなす。経験的な閾値で、実測による検証はしていない。
 function sameColumn(above: Rect, below: Rect): boolean {
     const overlap =
         Math.min(above[0] + above[2], below[0] + below[2]) -
