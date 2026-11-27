@@ -1,8 +1,17 @@
+import type { IncomingHttpHeaders, IncomingMessage } from 'node:http';
+import type { FileSource } from './config.ts';
 import {
-    request,
-    type IncomingHttpHeaders,
-    type IncomingMessage,
-} from 'node:http';
+    bodyOf,
+    discard,
+    fetchWebdavFile,
+    followRedirects,
+    openLocalFile,
+    resolveRoots,
+    type FileBody,
+} from './files.ts';
+import { get, readBody, UpstreamError, type Endpoint } from './http.ts';
+
+export { UpstreamError };
 
 export const SORT_KEYS = [
     'dateModified',
@@ -52,28 +61,22 @@ export interface DocumentMetadata {
 export interface ZoteroSourceOptions {
     endpoint: Endpoint;
     apiPath: string;
-    filePath: string;
+    apiKey?: string;
+    file: FileSource;
     timeoutMs: number;
-}
-
-export class UpstreamError extends Error {
-    readonly status: number;
-
-    constructor(status: number, message: string) {
-        super(message);
-        this.status = status;
-    }
 }
 
 interface ZoteroItem {
     key: string;
     links?: { attachment?: { href: string; attachmentType?: string } };
+    meta?: { numChildren?: number };
     data: {
         itemType: string;
         title?: string;
         date?: string;
         parentItem?: string;
         contentType?: string;
+        filename?: string;
         publicationTitle?: string;
         DOI?: string;
         creators?: { firstName?: string; lastName?: string; name?: string }[];
@@ -82,19 +85,15 @@ interface ZoteroItem {
 
 const ITEM_KEY = /^[A-Z0-9]{8}$/;
 
-export type Endpoint = { socketPath: string } | { host: string; port: number };
-
-export function parseEndpoint(value: string): Endpoint {
-    if (value.startsWith('unix:'))
-        return { socketPath: value.slice('unix:'.length) };
-    const url = new URL(value);
-    if (url.protocol !== 'http:' || url.pathname !== '/')
-        throw new Error(`unsupported endpoint: ${value}`);
-    return { host: url.hostname, port: Number(url.port || 80) };
-}
-
 export class ZoteroSource {
     readonly #options: ZoteroSourceOptions;
+
+    readonly #localRoots: string[];
+
+    #attachmentIndex: {
+        at: number;
+        promise: Promise<Map<string, string>>;
+    } | null = null;
 
     readonly #searchCache = new Map<
         string,
@@ -102,12 +101,19 @@ export class ZoteroSource {
     >();
 
     constructor(options: ZoteroSourceOptions) {
-        if (!options.filePath.includes('{key}'))
+        if (
+            options.file.kind === 'template' &&
+            !options.file.path.includes('{key}')
+        )
             throw new Error('the file path must contain {key}');
         this.#options = {
             ...options,
             apiPath: options.apiPath.replace(/\/$/, ''),
         };
+        this.#localRoots =
+            options.file.kind === 'local'
+                ? resolveRoots(options.file.dirs)
+                : [];
     }
 
     async search(
@@ -139,38 +145,84 @@ export class ZoteroSource {
         ]);
         const cached = this.#searchCache.get(cacheKey);
         if (cached && Date.now() - cached.at < SEARCH_CACHE_MS) return cached;
-        const documents: DocumentSummary[] = [];
-        let start = 0;
-        let total = Infinity;
-        while (start < total && start < MAX_SCANNED_ITEMS) {
-            const params = new URLSearchParams({
-                start: String(start),
-                limit: String(PAGE_LIMIT),
-                sort: options.sort,
-                direction: options.direction,
-            });
-            if (options.query) params.set('q', options.query);
-            // items/top は子の添付を含まないため、添付のキーは links.attachment から得る。
-            const { body: items, headers } = await this.#json<ZoteroItem[]>(
-                `${this.#options.apiPath}/items/top?${params}`,
-                signal,
-            );
-            documents.push(...items.flatMap(pdfSummary));
-            const reported = headers['total-results'];
-            total =
-                typeof reported === 'string' && /^\d+$/.test(reported)
-                    ? Number(reported)
-                    : items.length < PAGE_LIMIT
-                      ? start + items.length
-                      : Infinity;
-            if (items.length === 0) break;
-            start += items.length;
-        }
-        const entry = { at: Date.now(), documents, truncated: start < total };
+        const params = new URLSearchParams({
+            sort: options.sort,
+            direction: options.direction,
+        });
+        if (options.query) params.set('q', options.query);
+        const { items, truncated } = await this.#scan(
+            `${this.#options.apiPath}/items/top`,
+            params,
+            signal,
+        );
+        const index = items.some(needsAttachmentIndex)
+            ? await this.#pdfAttachments(signal)
+            : new Map<string, string>();
+        const documents = items.flatMap((item) => pdfSummary(item, index));
+        const entry = { at: Date.now(), documents, truncated };
         this.#searchCache.set(cacheKey, entry);
         if (this.#searchCache.size > SEARCH_CACHE_ENTRIES)
             this.#searchCache.delete(this.#searchCache.keys().next().value!);
         return entry;
+    }
+
+    async #scan(
+        path: string,
+        params: URLSearchParams,
+        signal: AbortSignal,
+    ): Promise<{ items: ZoteroItem[]; truncated: boolean }> {
+        const items: ZoteroItem[] = [];
+        let start = 0;
+        let total = Infinity;
+        while (start < total && start < MAX_SCANNED_ITEMS) {
+            const page = new URLSearchParams(params);
+            page.set('start', String(start));
+            page.set('limit', String(PAGE_LIMIT));
+            const { body, headers } = await this.#json<ZoteroItem[]>(
+                `${path}?${page}`,
+                signal,
+            );
+            items.push(...body);
+            const reported = headers['total-results'];
+            total =
+                typeof reported === 'string' && /^\d+$/.test(reported)
+                    ? Number(reported)
+                    : body.length < PAGE_LIMIT
+                      ? start + body.length
+                      : Infinity;
+            if (body.length === 0) break;
+            start += body.length;
+        }
+        return { items, truncated: start < total };
+    }
+
+    #pdfAttachments(signal: AbortSignal): Promise<Map<string, string>> {
+        const cached = this.#attachmentIndex;
+        if (cached && Date.now() - cached.at < SEARCH_CACHE_MS)
+            return cached.promise;
+        const promise = this.#scan(
+            `${this.#options.apiPath}/items`,
+            new URLSearchParams({
+                itemType: 'attachment',
+                sort: 'dateAdded',
+                direction: 'asc',
+            }),
+            signal,
+        ).then(({ items }) => {
+            const index = new Map<string, string>();
+            for (const item of items) {
+                const parent = item.data.parentItem;
+                if (parent && isPdf(item) && !index.has(parent))
+                    index.set(parent, item.key);
+            }
+            return index;
+        });
+        this.#attachmentIndex = { at: Date.now(), promise };
+        promise.catch(() => {
+            if (this.#attachmentIndex?.promise === promise)
+                this.#attachmentIndex = null;
+        });
+        return promise;
     }
 
     async metadata(
@@ -195,22 +247,51 @@ export class ZoteroSource {
         };
     }
 
-    async file(key: string, signal: AbortSignal): Promise<IncomingMessage> {
+    async file(key: string, signal: AbortSignal): Promise<FileBody> {
         const attachment = await this.#item(key, signal);
         if (!attachment || !isPdf(attachment))
             throw new UpstreamError(404, `${key} is not a PDF attachment`);
-        const response = await this.#request(
-            this.#options.filePath.replace('{key}', key),
-            signal,
-        );
-        if (response.statusCode !== 200) {
-            response.resume();
-            throw new UpstreamError(
-                response.statusCode ?? 502,
-                `file request returned ${response.statusCode}`,
-            );
+        const source = this.#options.file;
+        const { timeoutMs } = this.#options;
+        const fileApiPath = `${this.#options.apiPath}/items/${key}/file`;
+        switch (source.kind) {
+            case 'template': {
+                const response = await this.#request(
+                    source.path.replace('{key}', key),
+                    signal,
+                );
+                if (response.statusCode !== 200)
+                    discard(response, 'file request');
+                return bodyOf(response);
+            }
+            case 'local': {
+                // Zotero の Local API は /file で本体を返さず、実ファイルの file:// URL を Location に入れた 302 を返す。
+                const response = await this.#request(fileApiPath, signal);
+                response.resume();
+                const location = response.headers.location;
+                if (response.statusCode !== 302 || typeof location !== 'string')
+                    throw new UpstreamError(
+                        response.statusCode === 404 ? 404 : 502,
+                        `file request returned ${response.statusCode}`,
+                    );
+                return openLocalFile(this.#localRoots, location, key);
+            }
+            case 'web':
+                return followRedirects(
+                    await this.#request(fileApiPath, signal),
+                    timeoutMs,
+                    signal,
+                );
+            case 'webdav':
+                return fetchWebdavFile(
+                    source.url,
+                    source.credentials,
+                    key,
+                    attachment.data.filename,
+                    timeoutMs,
+                    signal,
+                );
         }
-        return response;
     }
 
     async #item(key: string, signal: AbortSignal): Promise<ZoteroItem | null> {
@@ -240,52 +321,48 @@ export class ZoteroSource {
                 `request returned ${response.statusCode} for ${path}`,
             );
         }
-        const chunks: Buffer[] = [];
-        let size = 0;
-        for await (const chunk of response) {
-            size += (chunk as Buffer).length;
-            if (size > MAX_JSON_BYTES) {
-                response.destroy();
-                throw new UpstreamError(
-                    502,
-                    `response is too large for ${path}`,
-                );
-            }
-            chunks.push(chunk as Buffer);
-        }
+        const body = await readBody(response, MAX_JSON_BYTES, path);
         return {
-            body: JSON.parse(Buffer.concat(chunks).toString('utf8')) as T,
+            body: JSON.parse(body.toString('utf8')) as T,
             headers: response.headers,
         };
     }
 
     #request(path: string, signal: AbortSignal): Promise<IncomingMessage> {
-        return new Promise((resolve, reject) => {
-            const req = request(
-                {
-                    ...this.#options.endpoint,
-                    path,
-                    method: 'GET',
-                    headers: { 'Zotero-API-Version': '3' },
-                    signal,
-                },
-                resolve,
-            );
-            req.setTimeout(this.#options.timeoutMs, () =>
-                req.destroy(
-                    new UpstreamError(504, `request timed out: ${path}`),
-                ),
-            );
-            req.on('error', reject);
-            req.end();
+        return get(this.#options.endpoint, path, {
+            headers: {
+                'Zotero-API-Version': '3',
+                ...(this.#options.apiKey
+                    ? { 'Zotero-API-Key': this.#options.apiKey }
+                    : {}),
+            },
+            timeoutMs: this.#options.timeoutMs,
+            signal,
+            label: path,
         });
     }
 }
 
-function pdfSummary(item: ZoteroItem): DocumentSummary[] {
+// zotero.org にファイルを置いていないライブラリでは、Web API の items/top が links.attachment を返さない。
+function needsAttachmentIndex(item: ZoteroItem): boolean {
+    return (
+        !isPdf(item) &&
+        item.links?.attachment === undefined &&
+        (item.meta?.numChildren ?? 0) > 0
+    );
+}
+
+function pdfSummary(
+    item: ZoteroItem,
+    index: Map<string, string>,
+): DocumentSummary[] {
     if (isPdf(item)) return [summary(item, item.key)];
     const attachment = item.links?.attachment;
-    if (attachment?.attachmentType !== 'application/pdf') return [];
+    if (attachment === undefined) {
+        const key = index.get(item.key);
+        return key ? [summary(item, key)] : [];
+    }
+    if (attachment.attachmentType !== 'application/pdf') return [];
     const key = /\/items\/([A-Z0-9]{8})$/.exec(attachment.href)?.[1];
     return key ? [summary(item, key)] : [];
 }
