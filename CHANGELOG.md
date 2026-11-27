@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-27
+
 ### Added
 
 - PDF の取得方法を `PDF_DEEPLINK_ZOTERO_FILE_SOURCE` で選べるようにした。PDF を返す HTTP の経路を別に用意しなくても、Zotero の利用形態に合わせて PDF を開ける
@@ -57,6 +59,7 @@
 - 出典（著者、発行年、タイトル、掲載誌、DOI、ページ、目印）のコピー
 - コンテナで実行するための Dockerfile と、Unix ソケットでの待ち受け
 
-[Unreleased]: https://github.com/sakashita44/pdf-deeplink/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/sakashita44/pdf-deeplink/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/sakashita44/pdf-deeplink/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/sakashita44/pdf-deeplink/compare/v0.1.0...v1.0.0
 [0.1.0]: https://github.com/sakashita44/pdf-deeplink/releases/tag/v0.1.0
